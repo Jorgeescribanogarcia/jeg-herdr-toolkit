@@ -61,3 +61,9 @@ id = "settings"
 title = "Settings"
 placement = "popup"
 command = ["target/release/herdr-settings.exe"]
+
+[[actions]]
+id = "paste"
+title = "Paste clipboard files or image as paths"
+contexts = ["workspace"]
+command = ["target/release/herdr-paste.exe"]

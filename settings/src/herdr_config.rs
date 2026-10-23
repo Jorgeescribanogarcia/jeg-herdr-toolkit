@@ -7,10 +7,12 @@ use common::{Settings, State};
 use toml_edit::{ArrayOfTables, DocumentMut, Item, Table, Value, value};
 
 /// Plugin actions with a shortcut: (action id, description herdr will show).
-const ACTIONS: [(&str, &str); 3] = [
+/// Same order as `Shortcuts::all`.
+const ACTIONS: [(&str, &str); 4] = [
     ("viewer", "file viewer on the right"),
     ("viewer-popup", "file viewer popup"),
     ("settings", "herdr toolkit settings"),
+    ("paste", "paste clipboard files or image as paths"),
 ];
 
 /// Returns the new `config.toml`. `plugin` is the plugin id (`jeg-herdr-toolkit`).
@@ -45,14 +47,14 @@ pub fn apply(config: &str, settings: &Settings, plugin: &str) -> Result<String, 
     let ids: Vec<String> = ACTIONS.iter().map(|(id, _)| format!("{plugin}.{id}")).collect();
     // The plugin's entries that no longer exist go; the remaining ones are updated in place, not moved.
     bindings.retain(|t| !ours(t) || ids.iter().any(|id| t.get("command").and_then(Item::as_str) == Some(id)));
-    let keys = [&settings.shortcuts.viewer_side, &settings.shortcuts.viewer_popup, &settings.shortcuts.settings];
+    let keys = settings.shortcuts.all();
     for ((id, (_, description)), key) in ids.iter().zip(ACTIONS).zip(keys) {
         let existing = bindings.iter_mut().find(|t| t.get("command").and_then(Item::as_str) == Some(id));
         match existing {
-            Some(t) => t["key"] = value(key.as_str()),
+            Some(t) => t["key"] = value(key),
             None => {
                 let mut t = Table::new();
-                t["key"] = value(key.as_str());
+                t["key"] = value(key);
                 t["type"] = value("plugin_action");
                 t["command"] = value(id.as_str());
                 t["description"] = value(description);
@@ -176,7 +178,7 @@ description = "from another plugin"
             bindings.iter().filter(|t| t["command"].as_str() == Some("jeg-herdr-toolkit.viewer-popup")).collect();
         assert_eq!(popups.len(), 1);
         assert_eq!(popups[0]["key"].as_str(), Some("prefix+g"));
-        assert_eq!(bindings.len(), 4); // the foreign one and the plugin's three
+        assert_eq!(bindings.len(), 5); // the foreign one and the plugin's four
     }
 
     #[test]
@@ -192,7 +194,7 @@ description = "from another plugin"
         let doc: DocumentMut = apply("", &Settings::default(), PLUGIN).unwrap().parse().unwrap();
         let bindings = doc["keys"]["command"].as_array_of_tables().unwrap();
         let keys: Vec<_> = bindings.iter().map(|t| t["key"].as_str().unwrap().to_string()).collect();
-        assert_eq!(keys, ["prefix+ctrl+f", "prefix+f", "prefix+."]);
+        assert_eq!(keys, ["prefix+ctrl+f", "prefix+f", "prefix+.", "prefix+i"]);
     }
 
     #[test]

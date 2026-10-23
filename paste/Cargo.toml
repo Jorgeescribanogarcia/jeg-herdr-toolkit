@@ -1,0 +1,8 @@
+[package]
+name = "herdr-paste"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+arboard = "3.7"
+png = "0.18"

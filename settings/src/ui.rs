@@ -49,7 +49,7 @@ fn suggestions() -> Vec<char> {
 }
 
 const SECTIONS: [&str; 4] = ["Icons", "Colours", "Viewer", "Shortcuts"];
-const SHORTCUTS: [&str; 3] = ["Viewer on the right", "Viewer popup", "This panel"];
+const SHORTCUTS: [&str; 4] = ["Viewer on the right", "Viewer popup", "This panel", "Paste files / image"];
 
 enum Mode {
     Normal,
@@ -160,6 +160,8 @@ impl Panel<'_> {
     fn change(&mut self, change: impl FnOnce(&mut Settings)) {
         let mut new = self.settings.clone();
         change(&mut new);
+        // Picking the set's own icon again means «follow the set», not a custom icon that looks the same.
+        new.normalize();
         match new.validate() {
             Ok(()) => {
                 self.settings = new;
@@ -218,6 +220,11 @@ impl Panel<'_> {
             }
             _ => {}
         }
+    }
+
+    /// The selected row is a status icon with a custom glyph (not the set's).
+    fn on_custom_icon(&self) -> bool {
+        self.section == 0 && self.row > 0 && self.settings.icons.overrides.contains_key(&State::ALL[self.row - 1])
     }
 
     fn go_to_section(&mut self, section: usize) {
@@ -342,12 +349,13 @@ impl Panel<'_> {
             KeyCode::Char(c) => text.push(c),
             KeyCode::Enter => {
                 match field {
-                    Field::Glyph(state) => match parse_glyph(&text) {
-                        Some(g) => self.change(|s| {
-                            s.icons.overrides.insert(state, g);
-                        }),
-                        None => self.message = Some((format!("“{text}” is not a glyph code (e.g. f05e0)"), true)),
-                    },
+                    Field::Glyph(state) => {
+                        let mut error = None;
+                        self.change(|s| error = set_glyph_from_text(s, state, &text).err());
+                        if let Some(e) = error {
+                            self.message = Some((e, true));
+                        }
+                    }
                     Field::Color(state) => {
                         let hex = format!("#{}", text.trim_start_matches('#').to_lowercase());
                         let bold = self.settings.color(state).bold;
@@ -377,11 +385,7 @@ impl Panel<'_> {
                     self.message = Some((format!("{shortcut} is already used by: {}", used_by.join(", ")), true));
                     return;
                 }
-                self.change(|s| match which {
-                    0 => s.shortcuts.viewer_side = shortcut,
-                    1 => s.shortcuts.viewer_popup = shortcut,
-                    _ => s.shortcuts.settings = shortcut,
-                });
+                self.change(|s| s.shortcuts.set(which, shortcut));
                 return;
             }
             _ => candidate = key_to_herdr(k, with_prefix),
@@ -423,7 +427,7 @@ impl Panel<'_> {
 
         let (text, color) = match (&self.mode, &self.message) {
             (Mode::Typing { field: Field::Glyph(_), text }, _) => {
-                (format!(" Glyph code (e.g. f05e0): {text}▏  ⏎ accept  Esc cancel"), ACCENT)
+                (format!(" Glyph code (e.g. f05e0), empty for the set's icon: {text}▏  ⏎ accept  Esc cancel"), ACCENT)
             }
             (Mode::Typing { field: Field::Color(_), text }, _) => {
                 (format!(" Colour #rrggbb: {text}▏  ⏎ accept  Esc cancel"), ACCENT)
@@ -450,6 +454,11 @@ impl Panel<'_> {
                 )
             }
             (_, Some((m, error))) => (format!(" {m}"), if *error { ERROR } else { OK }),
+            _ if self.on_custom_icon() => (
+                " Custom icon · ⌫ back to the set's icon · ←→ other icons · ⏎ type a code (empty: back to the set)"
+                    .into(),
+                ACCENT,
+            ),
             _ => (
                 " Click or 1-4: section · click: select and change (right: back) · ↑↓ ←→ ⏎ · ⌫ default · u undo · q close"
                     .into(),
@@ -499,8 +508,8 @@ impl Panel<'_> {
                 }
             }
             _ => {
-                for shortcut in [&s.shortcuts.viewer_side, &s.shortcuts.viewer_popup, &s.shortcuts.settings] {
-                    values.push(vec![Span::raw(shortcut.clone())]);
+                for shortcut in s.shortcuts.all() {
+                    values.push(vec![Span::raw(shortcut.to_string())]);
                 }
             }
         }
@@ -549,6 +558,18 @@ fn add(value: u8, step: i32, min: u8, max: u8) -> u8 {
     (value as i32 + step).clamp(min.into(), max.into()) as u8
 }
 
+/// What Enter does after typing a glyph: empty text goes back to the set's icon; otherwise the code or
+/// character becomes the state's icon.
+fn set_glyph_from_text(settings: &mut Settings, state: State, text: &str) -> Result<(), String> {
+    if text.trim().is_empty() {
+        settings.icons.overrides.remove(&state);
+        return Ok(());
+    }
+    let glyph = parse_glyph(text).ok_or_else(|| format!("“{text}” is not a glyph code (e.g. f05e0)"))?;
+    settings.icons.overrides.insert(state, glyph);
+    Ok(())
+}
+
 /// A hex code (`f05e0`, `U+F05E0`) or a character as it is.
 fn parse_glyph(text: &str) -> Option<char> {
     let text = text.trim();
@@ -570,6 +591,17 @@ mod tests {
         assert_eq!(parse_glyph("U+F05E0"), Some('\u{f05e0}'));
         assert_eq!(parse_glyph("✓"), Some('✓'));
         assert_eq!(parse_glyph("zz"), None);
+    }
+
+    #[test]
+    fn typing_a_glyph() {
+        let mut s = Settings::default();
+        set_glyph_from_text(&mut s, State::Working, "✦").unwrap();
+        assert_eq!(s.glyph(State::Working), '✦');
+        // Empty text goes back to the set's icon instead of being an error.
+        set_glyph_from_text(&mut s, State::Working, "  ").unwrap();
+        assert!(s.icons.overrides.is_empty());
+        assert!(set_glyph_from_text(&mut s, State::Working, "zz").is_err());
     }
 
     #[test]

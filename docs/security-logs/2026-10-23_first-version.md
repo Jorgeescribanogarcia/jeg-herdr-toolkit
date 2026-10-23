@@ -13,6 +13,11 @@ user configuration files.
   whose `command` starts with `jeg-herdr-toolkit.` are touched (recognised by id, not by description).
   The rest of the file is kept as it is.
 - **Files read:** the ones previewed in the viewer (up to 5 MB; binaries are not read in full).
+- **Clipboard (paste action):** only read, never written. A file list is typed as paths; an image is
+  saved as `clipboard-<ms>.png` in the plugin's state folder and its path typed. Paths are passed to
+  `herdr pane send-text` as a single argument (no shell), quoted if they contain spaces or shell-special
+  characters; text is typed, never run (no Enter is sent). Saved images older than 7 days are removed,
+  and only files named `clipboard-*.png` in that folder.
 
 ## Safeguards
 

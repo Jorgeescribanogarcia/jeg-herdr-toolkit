@@ -57,6 +57,7 @@ pub struct Shortcuts {
     pub viewer_side: String,
     pub viewer_popup: String,
     pub settings: String,
+    pub paste: String,
 }
 
 impl Default for Settings {
@@ -84,7 +85,30 @@ impl Default for Viewer {
 
 impl Default for Shortcuts {
     fn default() -> Shortcuts {
-        Shortcuts { viewer_side: "prefix+ctrl+f".into(), viewer_popup: "prefix+f".into(), settings: "prefix+.".into() }
+        Shortcuts {
+            viewer_side: "prefix+ctrl+f".into(),
+            viewer_popup: "prefix+f".into(),
+            settings: "prefix+.".into(),
+            paste: "prefix+i".into(),
+        }
+    }
+}
+
+impl Shortcuts {
+    /// In the order of the plugin's actions: viewer on the right, viewer popup, settings, paste.
+    pub fn all(&self) -> [&str; 4] {
+        [&self.viewer_side, &self.viewer_popup, &self.settings, &self.paste]
+    }
+
+    /// `index` in the order of `all`.
+    pub fn set(&mut self, index: usize, shortcut: String) {
+        let slot = match index {
+            0 => &mut self.viewer_side,
+            1 => &mut self.viewer_popup,
+            2 => &mut self.settings,
+            _ => &mut self.paste,
+        };
+        *slot = shortcut;
     }
 }
 
@@ -139,12 +163,14 @@ impl Settings {
         if !(1..=60).contains(&v.refresh_secs) {
             return Err("the refresh interval must be between 1 and 60 s".into());
         }
-        let shortcuts = [&self.shortcuts.viewer_side, &self.shortcuts.viewer_popup, &self.shortcuts.settings];
+        let shortcuts = self.shortcuts.all();
         if shortcuts.iter().any(|s| s.is_empty()) {
             return Err("a shortcut is empty".into());
         }
-        if shortcuts[0] == shortcuts[1] || shortcuts[0] == shortcuts[2] || shortcuts[1] == shortcuts[2] {
-            return Err("two plugin actions have the same shortcut".into());
+        for (i, a) in shortcuts.iter().enumerate() {
+            if shortcuts[i + 1..].contains(a) {
+                return Err("two plugin actions have the same shortcut".into());
+            }
         }
         Ok(())
     }
@@ -155,6 +181,13 @@ impl Settings {
             return g;
         }
         icon_sets::icon_set(&self.icons.set).unwrap_or(&ICON_SETS[0]).glyphs[state.index()]
+    }
+
+    /// Drops overrides equal to the set's own glyph: picking the set's icon again means «use the set»,
+    /// so it follows the set when the set changes.
+    pub fn normalize(&mut self) {
+        let set = icon_sets::icon_set(&self.icons.set).unwrap_or(&ICON_SETS[0]);
+        self.icons.overrides.retain(|state, glyph| set.glyphs[state.index()] != *glyph);
     }
 
     pub fn color(&self, state: State) -> Color {
@@ -198,6 +231,7 @@ mod tests {
         assert_eq!(s.shortcuts.viewer_side, "prefix+ctrl+f");
         assert_eq!(s.shortcuts.viewer_popup, "prefix+f");
         assert_eq!(s.shortcuts.settings, "prefix+.");
+        assert_eq!(s.shortcuts.paste, "prefix+i");
         assert_eq!(s.validate(), Ok(()));
     }
 
@@ -226,6 +260,17 @@ mod tests {
     fn missing_file_no_warning() {
         let dir = folder("missing");
         assert_eq!(Settings::load(&dir), (Settings::default(), None));
+    }
+
+    #[test]
+    fn override_equal_to_the_set_is_no_longer_custom() {
+        let mut s = Settings::default();
+        s.icons.overrides.insert(State::Working, '\u{f006a}'); // Material's own Working glyph
+        s.icons.overrides.insert(State::Idle, '✓');
+        s.normalize();
+        assert_eq!(s.icons.overrides.len(), 1);
+        assert_eq!(s.glyph(State::Working), '\u{f006a}');
+        assert_eq!(s.glyph(State::Idle), '✓');
     }
 
     #[test]

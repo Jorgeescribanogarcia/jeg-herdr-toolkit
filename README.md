@@ -1,10 +1,12 @@
 # jeg-herdr-toolkit
 
-A [herdr](https://herdr.dev) plugin with three pieces that live inside herdr:
+A [herdr](https://herdr.dev) plugin with four pieces that live inside herdr:
 
 - **File viewer** in a herdr pane: a tree with Material Icon Theme icons and VS Code–style git
   status, plus a Markdown and code preview.
 - **Agent status icons** in the sidebar, with several icon sets and colours to choose from.
+- **Paste as paths**: files copied in Explorer, or an image from the clipboard, typed into the active
+  pane as paths that agents such as Claude Code can read.
 - **Settings panel** to change all of the above and the shortcuts, with keyboard or mouse.
 
 ## Requirements
@@ -39,6 +41,7 @@ A Cargo workspace:
 | `common/` | `settings.toml` format, agent states, icon sets and status publishing. |
 | `viewer/` | File viewer (`herdr-viewer`). |
 | `status/` | Agent status icons in the sidebar (`herdr-status`). |
+| `paste/` | Paste clipboard files or image as paths (`herdr-paste`). |
 | `settings/` | Settings panel (`herdr-settings`). |
 
 ## Shortcuts
@@ -48,8 +51,9 @@ A Cargo workspace:
 | `prefix+Ctrl+F` | Viewer on the right (the same shortcut closes it) |
 | `prefix+f` | Viewer popup (`q` or `Esc` close it) |
 | `prefix+.` | Settings panel |
+| `prefix+i` | Paste clipboard files or image as paths |
 
-All three can be changed from the panel itself.
+All four can be changed from the panel itself.
 
 ## File viewer
 
@@ -85,7 +89,8 @@ value on every pane with an agent and on every workspace: the state's icon plus 
 (`󰁪 Dev`). The sidebar shows it instead of `state_icon` and `workspace`, and colours it by the icon it
 starts with.
 
-Sets: **Material** (default), **Codicons**, **Circles** and **Text** (no Nerd Font needed). By default,
+Sets: **Material** (default), **Codicons**, **Circles**, **Font Awesome**, **Octicons**, **Progress**,
+**Time**, **Signals**, **Robots**, **Weather**, and **Text** and **Shapes** (no Nerd Font needed). By default,
 Material with the One Dark palette: working 󰁪 `#e5c07b` · waiting for you 󰂞 `#e06c75` bold · done 󰗠
 `#98c379` · idle 󰗡 `#5c6370` (the done ✓ as an outline: “done” means it finished and you have not
 looked yet) · unknown 󰘥 `#4b5263`. Within a set the five icons must differ, because the colour goes by
@@ -100,15 +105,37 @@ icon.
 - **If the plugin is disabled**, the sidebar rows lose their name: remove the `[ui.sidebar.agents]`
   and `[ui.sidebar.spaces]` blocks from `config.toml`.
 
+## Paste files and images as paths
+
+herdr's own clipboard-image bridge only works with `herdr --remote`; on local Windows panes it is not
+wired, so pasting a screenshot into an agent does nothing. `prefix+i` covers that: it looks at the
+clipboard and types into the active pane:
+
+- **Files copied in Explorer:** their paths.
+- **An image** (a screenshot, an image copied from a browser): it is saved as a PNG in the plugin's
+  state folder (`clipboard-<time>.png`; those older than 7 days are removed on the next paste) and its
+  path is typed.
+
+Paths with spaces or shell-special characters go in double quotes, and a space follows so you can
+keep typing. With anything else on the clipboard (plain text), nothing is typed and a herdr
+notification says so; use the normal paste for text.
+
+Dragging a file onto the terminal is handled by the terminal itself (Windows Terminal types its path),
+not by herdr or its plugins.
+
 ## Settings panel
 
 A popup with four sections: **Icons** (set and icon per state), **Colours**, **Viewer** (popup size,
-tree width, git-ignored files, refresh interval) and **Shortcuts**. Changes show in the sidebar at
+tree width, git-ignored files, refresh interval) and **Shortcuts** (all four actions). Changes show in the sidebar at
 once; `u` goes back to what there was when the panel was opened.
 
 With the mouse: click a section; click an option to select it and click again to change it (right
 click changes backwards; on the icon set, click `◀`); wheel to move. With the keyboard: `1`-`4` or
 `Tab` for the section, `↑↓` the option, `←→` the value, `Enter` to edit or capture a shortcut.
+
+A status icon can follow its set or be custom. To go back from a custom icon to the set's: `⌫`, `Enter`
+with an empty code, or `←→` until the set's icon comes round again (the footer says so on a custom
+icon). A custom icon follows no set: changing the set keeps it.
 
 - **`settings.toml`** (in `herdr plugin config-dir jeg-herdr-toolkit`) is the single source of truth.
   If it is missing or wrong, the viewer and the status icons use the defaults and say so (viewer

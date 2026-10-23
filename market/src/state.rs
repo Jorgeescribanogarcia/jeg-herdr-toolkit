@@ -101,6 +101,17 @@ pub fn forget_pending(dir: &Path) -> io::Result<()> {
     }
 }
 
+/// Removes the list of pending updates if it still is `original`: a newer check may have replaced it
+/// while the window showed the old one.
+pub fn remove_pending_if(dir: &Path, original: &str) -> io::Result<()> {
+    match fs::read_to_string(dir.join(PENDING)) {
+        Ok(now) if now == original => fs::remove_file(dir.join(PENDING)),
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 /// Updates the user said no to, as (plugin id, commit offered). They are not offered again until the
 /// plugin publishes a newer commit or herdr restarts.
 pub fn dismissed(dir: &Path) -> Vec<(String, String)> {
@@ -220,6 +231,18 @@ pub mod tests {
         let dir = folder("pending");
         assert!(!has_pending(&dir));
         fs::write(dir.join(PENDING), "[]").unwrap();
+        assert!(has_pending(&dir));
+    }
+
+    #[test]
+    fn pending_is_removed_only_if_unchanged() {
+        let dir = folder("pending-unchanged");
+        fs::write(dir.join(PENDING), "[1]").unwrap();
+        remove_pending_if(&dir, "[1]").unwrap();
+        assert!(!has_pending(&dir));
+        // A newer check wrote another list while the window was open: it stays.
+        fs::write(dir.join(PENDING), "[2]").unwrap();
+        remove_pending_if(&dir, "[1]").unwrap();
         assert!(has_pending(&dir));
     }
 

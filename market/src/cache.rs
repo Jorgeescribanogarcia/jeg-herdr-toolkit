@@ -33,7 +33,11 @@ pub fn load_index(
     {
         return Ok((list.clone(), Freshness::Fresh));
     }
-    let downloaded = fetch().and_then(|text| index::parse(&text).map(|list| (text, list)));
+    // An empty list parses fine but is not an index anyone could use: it must not replace a good copy.
+    let downloaded = fetch().and_then(|text| match index::parse(&text)? {
+        list if list.is_empty() => Err("herdr's plugin index came empty".to_string()),
+        list => Ok((text, list)),
+    });
     match downloaded {
         Ok((text, list)) => {
             // Without a copy on disk the explorer still works; it just downloads again next time.
@@ -121,6 +125,16 @@ mod tests {
         load_index(&dir, at(1_000_000), || Ok(INDEX.to_string())).unwrap();
         let (list, saved) = cached(&dir).unwrap();
         assert_eq!((list.len(), saved), (5, at(1_000_000)));
+    }
+
+    #[test]
+    fn empty_index_does_not_replace_a_good_cache() {
+        let dir = folder("cache-empty");
+        load_index(&dir, at(1_000_000), || Ok(INDEX.to_string())).unwrap();
+        let (list, freshness) = load_index(&dir, at(1_000_000 + 3600), || Ok(r#"{"plugins": []}"#.into())).unwrap();
+        assert_eq!((list.len(), freshness), (5, Freshness::Stale(at(1_000_000))));
+        // Without a copy it is an error, not an empty explorer.
+        assert!(load_index(&folder("cache-empty-none"), at(1), || Ok(r#"{"plugins": []}"#.into())).is_err());
     }
 
     #[test]

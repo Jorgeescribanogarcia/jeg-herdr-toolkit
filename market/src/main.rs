@@ -78,9 +78,7 @@ fn main() -> ExitCode {
             }
             Ok(())
         }
-        Some("updates") => {
-            ui_updates::run(&env.herdr, &env.state, &env.state.join(state::PENDING), env.settings.marketplace.mark_all)
-        }
+        Some("updates") => ui_updates::run(&env.herdr, &env.state, env.settings.marketplace.mark_all),
         Some("open") => herdr::open_popup(&env.herdr, &env.plugin, "marketplace").map_err(|e| match e {
             OpenError::Busy => "herdr has another window open".into(),
             OpenError::Other(m) => m.into(),
@@ -99,6 +97,8 @@ fn main() -> ExitCode {
 #[derive(Debug, PartialEq)]
 enum Step {
     Nothing,
+    /// The check at startup is off: the interval starts now, so the first focus event does not do it.
+    Postpone,
     Check,
     /// The last check found updates but could not open the window: try again.
     ShowPending,
@@ -106,7 +106,7 @@ enum Step {
 
 fn next_step(startup: bool, m: &Marketplace, due: bool, pending: bool) -> Step {
     if startup {
-        return if m.check_at_startup { Step::Check } else { Step::Nothing };
+        return if m.check_at_startup { Step::Check } else { Step::Postpone };
     }
     match (due, pending) {
         (true, _) => Step::Check,
@@ -131,8 +131,10 @@ fn check(env: &Env, startup: bool) -> AppResult {
     }
     let due = state::due(&env.state, m.check_every_hours, now);
     let step = next_step(startup, &m, due, state::has_pending(&env.state));
-    if step == Step::Nothing {
-        return Ok(());
+    match step {
+        Step::Nothing => return Ok(()),
+        Step::Postpone => return Ok(state::mark_checked(&env.state, now)?),
+        Step::Check | Step::ShowPending => {}
     }
     let Some(_lock) = state::try_lock(&env.state, now)? else {
         return Ok(()); // another focus event's check is already running
@@ -190,7 +192,9 @@ mod tests {
         let on = Marketplace::default();
         let off = Marketplace { check_at_startup: false, check_every_hours: 0, ..Marketplace::default() };
         assert_eq!(next_step(true, &on, false, false), Step::Check);
-        assert_eq!(next_step(true, &off, true, true), Step::Nothing);
+        // Turned off at startup: the interval starts now, so the first focus event does not check
+        // as if it were a startup check.
+        assert_eq!(next_step(true, &off, true, true), Step::Postpone);
         assert_eq!(next_step(false, &on, true, false), Step::Check);
         assert_eq!(next_step(false, &on, false, false), Step::Nothing);
         // The window could not be opened last time (no workspace yet, another window open): try again

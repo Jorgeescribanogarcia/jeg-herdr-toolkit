@@ -53,8 +53,11 @@ pub struct UpdatesView {
     pub cursor: usize,
     phase: Phase,
     quit: bool,
-    // Where things were drawn in the last frame, for the mouse.
+    /// Problems saving what was turned down; shown on stderr once the window is closed.
+    warnings: Vec<String>,
+    // Where things were drawn in the last frame, for the mouse and to keep the cursor in view.
     list_area: Cell<Rect>,
+    scroll: Cell<usize>,
     update_button: Cell<Rect>,
     cancel_button: Cell<Rect>,
 }
@@ -72,7 +75,9 @@ impl UpdatesView {
             cursor: 0,
             phase: Phase::Choosing,
             quit: false,
+            warnings: Vec::new(),
             list_area: Cell::default(),
+            scroll: Cell::new(0),
             update_button: Cell::default(),
             cancel_button: Cell::default(),
         }
@@ -103,6 +108,20 @@ impl UpdatesView {
     }
 }
 
+/// The first row to draw so that `cursor` is inside a window of `height` rows, moving `scroll` as little
+/// as possible.
+pub fn scroll_for(cursor: usize, height: usize, scroll: usize) -> usize {
+    if height == 0 {
+        scroll
+    } else if cursor < scroll {
+        cursor
+    } else if cursor >= scroll + height {
+        cursor + 1 - height
+    } else {
+        scroll
+    }
+}
+
 /// How one `herdr plugin update` went, from its exit status and output. herdr prints the result on
 /// stdout and its preview and errors on stderr, so on failure the last stderr line is the reason.
 pub fn outcome(success: bool, stdout: &str, stderr: &str) -> Status {
@@ -116,13 +135,15 @@ pub fn outcome(success: bool, stdout: &str, stderr: &str) -> Status {
     }
 }
 
-/// Opens the window on the updates the check left in `pending`, and removes the file when it closes.
-pub fn run(herdr: &str, state_dir: &Path, pending: &Path, mark_all: bool) -> crate::AppResult {
-    let updates: Vec<Update> = serde_json::from_str(&std::fs::read_to_string(pending)?)?;
+/// Opens the window on the updates the check left in the state folder, and removes that list when it
+/// closes, unless a newer check replaced it meanwhile.
+pub fn run(herdr: &str, state_dir: &Path, mark_all: bool) -> crate::AppResult {
+    let original = std::fs::read_to_string(state_dir.join(state::PENDING))?;
+    let updates: Vec<Update> = serde_json::from_str(&original)?;
     let installed = crate::installed::installed_ids(&crate::installed::list(herdr)?);
     let mut view = UpdatesView::new(updates, &installed, mark_all);
     if view.rows.is_empty() {
-        std::fs::remove_file(pending)?;
+        state::remove_pending_if(state_dir, &original)?;
         return Ok(());
     }
     let mut terminal = ratatui::init();
@@ -131,7 +152,10 @@ pub fn run(herdr: &str, state_dir: &Path, pending: &Path, mark_all: bool) -> cra
     // On exit the popup closes; if this fails there is no terminal to give the mouse back to.
     let _ = execute!(io::stdout(), DisableMouseCapture);
     ratatui::restore();
-    std::fs::remove_file(pending)?;
+    for warning in &view.warnings {
+        eprintln!("herdr-market: {warning}");
+    }
+    state::remove_pending_if(state_dir, &original)?;
     result
 }
 
@@ -160,7 +184,11 @@ impl UpdatesView {
             };
             match action {
                 Some(Action::Update) => {
-                    state::dismiss(state_dir, &self.dismissed_on_update())?;
+                    // If this cannot be saved, the unmarked ones are offered again next time: the
+                    // update itself still goes ahead.
+                    if let Err(e) = state::dismiss(state_dir, &self.dismissed_on_update()) {
+                        self.warnings.push(format!("could not save the updates turned down: {e}"));
+                    }
                     if self.selected().is_empty() {
                         self.quit = true;
                     } else {
@@ -169,7 +197,9 @@ impl UpdatesView {
                     }
                 }
                 Some(Action::Cancel) => {
-                    state::dismiss(state_dir, &self.dismissed_on_cancel())?;
+                    if let Err(e) = state::dismiss(state_dir, &self.dismissed_on_cancel()) {
+                        self.warnings.push(format!("could not save the updates turned down: {e}"));
+                    }
                     self.quit = true;
                 }
                 None => {}
@@ -198,8 +228,13 @@ impl UpdatesView {
     fn key(&mut self, code: KeyCode) -> Option<Action> {
         match self.phase {
             Phase::Running => None,
+            // Arrows to read each result (a failure's reason shows below the list); any other key closes.
             Phase::Done => {
-                self.quit = true;
+                match code {
+                    KeyCode::Up | KeyCode::Char('k') => self.cursor = self.cursor.saturating_sub(1),
+                    KeyCode::Down | KeyCode::Char('j') => self.cursor = (self.cursor + 1).min(self.rows.len() - 1),
+                    _ => self.quit = true,
+                }
                 None
             }
             Phase::Choosing => {
@@ -222,14 +257,14 @@ impl UpdatesView {
             self.quit = true;
             return None;
         }
-        if self.phase != Phase::Choosing {
+        if self.phase == Phase::Running {
             return None;
         }
         match kind {
             MouseEventKind::Down(MouseButton::Left) if self.update_button.get().contains(at) => Some(Action::Update),
             MouseEventKind::Down(MouseButton::Left) if self.cancel_button.get().contains(at) => Some(Action::Cancel),
             MouseEventKind::Down(MouseButton::Left) if self.list_area.get().contains(at) => {
-                let row = (at.y - self.list_area.get().y) as usize;
+                let row = self.scroll.get() + (at.y - self.list_area.get().y) as usize;
                 if row < self.rows.len() {
                     self.cursor = row;
                     self.toggle();
@@ -258,16 +293,21 @@ impl UpdatesView {
         f.render_widget(Paragraph::new(title).block(Block::new().borders(Borders::BOTTOM).border_style(DIM)), header);
 
         let body = body.inner(ratatui::layout::Margin::new(1, 1));
+        // The list takes what it needs but leaves room for the details and the buttons; past that it scrolls.
+        let list_height = (self.rows.len() as u16).min(body.height.saturating_sub(5)).max(1);
         let [list, details, buttons] =
-            Layout::vertical([Constraint::Length(self.rows.len() as u16), Constraint::Fill(1), Constraint::Length(1)])
-                .areas(body);
+            Layout::vertical([Constraint::Length(list_height), Constraint::Fill(1), Constraint::Length(1)]).areas(body);
         self.list_area.set(list);
+        let scroll = scroll_for(self.cursor, list.height as usize, self.scroll.get());
+        self.scroll.set(scroll);
 
         let name_width = self.rows.iter().map(|r| r.update.name.chars().count()).max().unwrap_or(0).min(30);
         let lines: Vec<Line> = self
             .rows
             .iter()
             .enumerate()
+            .skip(scroll)
+            .take(list.height as usize)
             .map(|(i, r)| {
                 let u = &r.update;
                 let mark = if r.marked { "[x]" } else { "[ ]" };
@@ -290,7 +330,7 @@ impl UpdatesView {
                 };
                 spans.push(Span::styled(text, Style::new().fg(color)));
                 let line = Line::from(spans);
-                if i == self.cursor && self.phase == Phase::Choosing {
+                if i == self.cursor && self.phase != Phase::Running {
                     line.style(Style::new().bg(SELECTION_BG))
                 } else {
                     line
@@ -299,8 +339,15 @@ impl UpdatesView {
             .collect();
         f.render_widget(Paragraph::new(lines), list);
 
-        // What the selected update will run, if it differs from what is installed.
-        if let Some(r) = self.rows.get(self.cursor).filter(|r| r.update.runs_changed) {
+        // Below the list: why the selected update failed, in full; or what it will run, if that changed.
+        if let Some(Row { update, status: Status::Failed(e), .. }) = self.rows.get(self.cursor) {
+            let lines = vec![
+                Line::raw(""),
+                Line::styled(format!("✗ {} could not be updated:", clean(&update.name)), Style::new().fg(ERROR)),
+                Line::styled(format!("  {e}"), Style::new().fg(TEXT)),
+            ];
+            f.render_widget(Paragraph::new(lines).wrap(ratatui::widgets::Wrap { trim: false }), details);
+        } else if let Some(r) = self.rows.get(self.cursor).filter(|r| r.update.runs_changed) {
             let mut lines =
                 vec![Line::raw(""), Line::styled("⚠ This version runs something different:", Style::new().fg(WARNING))];
             for (label, commands) in [("on update", &r.update.new_build), ("at startup", &r.update.new_startup)] {
@@ -333,7 +380,7 @@ impl UpdatesView {
         let text = match self.phase {
             Phase::Choosing => " ↑↓ move · Space mark · a all/none · ⏎ update · Esc cancel",
             Phase::Running => " Updating… herdr builds each plugin; this can take a while.",
-            Phase::Done => " Done. Press any key to close.",
+            Phase::Done => " Done. ↑↓ to read each result · any other key closes.",
         };
         f.render_widget(
             Paragraph::new(text)
@@ -414,6 +461,25 @@ mod tests {
         let v = UpdatesView::new(vec![update("a"), update("gone")], &installed, true);
         assert_eq!(v.rows.len(), 1);
         assert_eq!(v.rows[0].update.id, "a");
+    }
+
+    #[test]
+    fn scroll_keeps_cursor_visible() {
+        assert_eq!(scroll_for(0, 5, 0), 0);
+        assert_eq!(scroll_for(10, 5, 0), 6);
+        assert_eq!(scroll_for(2, 5, 6), 2);
+        assert_eq!(scroll_for(3, 5, 1), 1);
+        assert_eq!(scroll_for(3, 0, 1), 1); // no room at all: leave it
+    }
+
+    #[test]
+    fn done_arrows_move_and_other_keys_close() {
+        let mut v = view(true);
+        v.phase = Phase::Done;
+        v.key(KeyCode::Down);
+        assert_eq!((v.cursor, v.quit), (1, false));
+        v.key(KeyCode::Enter);
+        assert!(v.quit);
     }
 
     #[test]

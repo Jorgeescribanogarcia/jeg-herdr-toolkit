@@ -7,7 +7,7 @@ use crate::http;
 use crate::index::Listing;
 use crate::installed::Manifest;
 use crate::process;
-use crate::text::{valid_repo, valid_subdir};
+use crate::text::{clean, valid_repo, valid_subdir};
 use crate::ui_updates::{Status, outcome};
 use crate::updates::parse_ls_remote;
 
@@ -37,7 +37,7 @@ pub fn fetch_manifest(l: &Listing) -> Result<Manifest, String> {
 pub fn install_args(l: &Listing) -> Result<Vec<String>, String> {
     let dir_ok = l.path.rsplit_once('/').is_none_or(|(dir, _)| valid_subdir(dir));
     if !valid_repo(&l.repo) || !dir_ok {
-        return Err(format!("“{}” is not a repo name that can be installed safely", l.repo));
+        return Err(format!("“{}” is not a repo name that can be installed safely", clean(&l.repo)));
     }
     Ok(vec!["plugin".into(), "install".into(), l.install_source(), "--yes".into()])
 }
@@ -102,6 +102,14 @@ mod tests {
         assert!(install_args(&l).is_err());
         l.path = "links/../../herdr-plugin.toml".into();
         assert!(manifest_url_at(&l, &l.head_commit).is_none());
+    }
+
+    #[test]
+    fn error_does_not_echo_control_characters() {
+        let mut l = listing("annotate");
+        l.repo = "\u{1b}[2J/x".into();
+        let error = install_args(&l).unwrap_err();
+        assert!(!error.contains('\u{1b}'), "{error:?}");
     }
 
     #[test]

@@ -26,8 +26,8 @@ uninstalls through herdr, and an update check that runs at startup and on focus 
   segments too; a commit must be alphanumeric. Anything else is refused before it reaches a URL or a
   command line, so it cannot be taken as an option or climb out of a path. Tests:
   `text::tests::valid_repo_names`, `valid_subdir_paths`, `install::tests::refuses_invalid_repo`.
-- **Third-party text is never interpreted:** descriptions, names and manifest commands are drawn after
-  removing control characters (no escape sequences reach the terminal) and are never run by the
+- **Third-party text is never interpreted:** descriptions, names, repo names, platforms, versions and
+  manifest commands are drawn (and echoed in errors) after removing control characters (no escape sequences reach the terminal) and are never run by the
   plugin. Test: `text::tests::clean_drops_control_characters`.
 - **What a plugin runs is shown before it runs:** the explorer's confirmation lists the plugin's
   Windows `[[build]]` and `[[startup]]` commands, read at the commit the default branch points to at
@@ -53,8 +53,7 @@ uninstalls through herdr, and an update check that runs at startup and on focus 
 - The integrity of what herdr downloads and builds: that is herdr's (`git` over HTTPS). Installing a
   plugin runs its build commands with your user's rights; the explorer shows them, it does not vet them.
 - The index is unreviewed (herdr says so); a listed plugin can be malicious.
-- A plugin installed into a sub-folder of its repo: herdr's `source.subdir` field name is assumed (only
-  root-level plugins were seen); if it differs, those plugins are skipped by the update check and the
-  reason is logged.
 - Update failures (a plugin whose build fails) were not reproduced; the window shows the last line herdr
-  prints on stderr.
+  prints on stderr, in full below the list for the selected row.
+- Plugins installed from a sub-folder of their repo: the field (`source.subdir`) was checked in herdr
+  0.9.5's source, but no such plugin was installed to try it end to end.

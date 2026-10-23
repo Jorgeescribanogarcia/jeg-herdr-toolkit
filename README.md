@@ -145,19 +145,21 @@ minutes by herdr). No GitHub account or token is needed.
   the plugin's `herdr-plugin.toml` at the listed commit.
 - `Enter` installs (after a confirmation that repeats what it runs, read at the branch's current
   commit; it cannot be confirmed until those commands have loaded), or, on an installed plugin,
-  updates or uninstalls it. A fork that reuses a plugin's id is not taken for the installed one: the
+  updates it (only offered if the index has a newer commit than the installed one, or if it follows
+  another branch) or uninstalls it. A fork that reuses a plugin's id is not taken for the installed one: the
   repo has to match too. The work is done by herdr's own `herdr plugin install`, `update` and
   `uninstall`.
-- The index is kept for 15 minutes in the plugin's state folder; without network the last copy is
-  shown, and the title says so.
+- The index is kept for 15 minutes in the plugin's state folder. The last copy shows at once while a
+  fresh one downloads; if that fails (or comes empty) the copy stays, and the title says from when.
 
 **Updates window** (a popup that opens by itself): for every plugin installed **from GitHub**, the
 installed commit is compared with the one its branch points to now (`git ls-remote`, nothing is
 downloaded). If any has a newer commit, the window lists them, all marked; `Space` unmarks one, `a`
-marks all or none, `Enter` updates the marked ones (`herdr plugin update`) and `Esc` cancels.
+marks all or none, `Enter` updates the marked ones (`herdr plugin update`) and `Esc` cancels. When it
+finishes, `↑↓` show each result (a failure's reason in full below the list); any other key closes.
 
 - **When:** at herdr startup, and again while herdr stays open once the interval set in the panel
-  has passed (6 h by default). There is no resident process: the check rides on herdr's focus events
+  has passed (6 h by default; with the startup check off, the interval counts from startup). There is no resident process: the check rides on herdr's focus events
   (workspace, tab, pane) and returns at once while the interval has not passed.
 - **Not offered:** plugins linked from a local folder (`herdr plugin link`), plugins installed at a
   fixed commit or tag, and updates you cancelled or left unmarked, until the plugin publishes a newer

@@ -34,6 +34,8 @@ use crate::ui_updates::Status;
 /// How long the cursor has to rest on a plugin before its manifest is fetched: scrolling through the
 /// list must not fire a download per row.
 const DWELL: Duration = Duration::from_millis(300);
+/// A manifest that could not be read is tried again after this long, if still selected.
+const RETRY_MANIFEST: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Job {
@@ -90,8 +92,9 @@ pub struct BrowseView {
     pub mode: Mode,
     pub quit: bool,
     stale: Option<SystemTime>,
-    /// Manifests already fetched, by `repo/commit/path`.
+    /// Manifests already fetched, by `repo/commit/path`; a failed one is tried again after a while.
     manifests: HashMap<String, Result<Manifest, String>>,
+    failed_at: HashMap<String, Instant>,
     // Where things were drawn in the last frame, for the mouse and to keep the cursor in view.
     list_area: Cell<Rect>,
     scroll: Cell<usize>,
@@ -120,6 +123,7 @@ impl BrowseView {
             quit: false,
             stale: None,
             manifests: HashMap::new(),
+            failed_at: HashMap::new(),
             list_area: Cell::default(),
             scroll: Cell::new(0),
         }
@@ -137,6 +141,25 @@ impl BrowseView {
 
     pub fn is_installed(&self, l: &Listing) -> bool {
         self.installed.iter().any(|p| installed::matches(p, l))
+    }
+
+    /// Whether to (re)fetch a manifest: never fetched, or failed long enough ago that a network blip
+    /// should be over.
+    pub fn needs_fetch(&self, key: &str, now: Instant) -> bool {
+        match self.manifests.get(key) {
+            None => true,
+            Some(Ok(_)) => false,
+            Some(Err(_)) => self.failed_at.get(key).is_none_or(|at| now.duration_since(*at) >= RETRY_MANIFEST),
+        }
+    }
+
+    pub fn manifest_loaded(&mut self, key: String, manifest: Result<Manifest, String>, now: Instant) {
+        if manifest.is_err() {
+            self.failed_at.insert(key.clone(), now);
+        } else {
+            self.failed_at.remove(&key);
+        }
+        self.manifests.insert(key, manifest);
     }
 
     /// Installing runs the plugin's build: only once what it runs has been shown.
@@ -228,8 +251,15 @@ impl BrowseView {
                         if !l.runs_on_windows() {
                             return None;
                         }
-                        let choices =
-                            if self.is_installed(&l) { vec![Job::Update, Job::Uninstall] } else { vec![Job::Install] };
+                        let choices = match self.installed.iter().find(|p| installed::matches(p, &l)) {
+                            None => vec![Job::Install],
+                            // The index knows only the default branch's commit: if that is what is
+                            // installed, there is nothing to update to.
+                            Some(p) if p.git_ref.is_none() && p.commit.as_deref() == Some(l.head_commit.as_str()) => {
+                                vec![Job::Uninstall]
+                            }
+                            Some(_) => vec![Job::Update, Job::Uninstall],
+                        };
                         self.mode = Mode::Confirm { listing: Box::new(l), choices, choice: 0 };
                     }
                     _ => {}
@@ -338,7 +368,7 @@ impl BrowseView {
                     Message::Index(Err(e)) if matches!(self.mode, Mode::Loading) => self.mode = Mode::Failed(e),
                     Message::Index(Err(_)) => {}
                     Message::Manifest(key, manifest) => {
-                        self.manifests.insert(key, manifest);
+                        self.manifest_loaded(key, manifest, Instant::now());
                         fetching = None;
                     }
                     Message::JobDone(status, installed) => {
@@ -364,7 +394,7 @@ impl BrowseView {
             }
             if let Some((key, l)) = selected
                 && fetching.is_none()
-                && !self.manifests.contains_key(&key)
+                && self.needs_fetch(&key, Instant::now())
                 && (confirming.is_some() || rested_since.0.elapsed() >= DWELL)
             {
                 fetching = Some(key.clone());
@@ -402,14 +432,14 @@ impl BrowseView {
             Job::Install => match install::install_args(l) {
                 Ok(args) => args,
                 Err(e) => {
-                    self.mode = Mode::Done { job, name: l.name.clone(), status: Status::Failed(e) };
+                    self.mode = Mode::Done { job, name: clean(&l.name), status: Status::Failed(e) };
                     return;
                 }
             },
             Job::Update => install::update_args(&l.id),
             Job::Uninstall => install::uninstall_args(&l.id),
         };
-        self.mode = Mode::Working { job, name: l.name.clone() };
+        self.mode = Mode::Working { job, name: clean(&l.name) };
         let (tx, herdr) = (tx.clone(), herdr.to_string());
         thread::spawn(move || {
             let status = install::run(&herdr, &args);
@@ -604,11 +634,15 @@ impl BrowseView {
             f.render_widget(Paragraph::new(lines), inner);
             return;
         };
-        let platforms = if l.platforms.is_empty() { "any platform".to_string() } else { l.platforms.join(", ") };
-        let herdr = l.min_herdr.as_deref().map(|v| format!(" · herdr ≥ {v}")).unwrap_or_default();
+        let platforms =
+            if l.platforms.is_empty() { "any platform".to_string() } else { clean(&l.platforms.join(", ")) };
+        let herdr = l.min_herdr.as_deref().map(|v| format!(" · herdr ≥ {}", clean(v))).unwrap_or_default();
         lines.push(Line::from(vec![
             Span::styled(format!(" {}", clean(&l.name)), Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled(format!("  {} · v{}{herdr} · {platforms}", l.repo, clean(&l.version)), Style::new().fg(DIM)),
+            Span::styled(
+                format!("  {} · v{}{herdr} · {platforms}", clean(&l.repo), clean(&l.version)),
+                Style::new().fg(DIM),
+            ),
         ]));
         lines.push(Line::styled(format!(" {}", clean(&l.description)), Style::new().fg(TEXT)));
         match self.manifests.get(&manifest_key(l)) {
@@ -728,6 +762,43 @@ mod tests {
         assert_eq!(v.key(KeyCode::Enter), None);
         v.manifests.insert(key, Ok(Manifest { version: "1".into(), build: vec![], startup: vec![] }));
         assert!(matches!(v.key(KeyCode::Enter), Some(Request::Run(Job::Install, _))));
+    }
+
+    #[test]
+    fn failed_manifest_is_retried_later() {
+        let mut v = view();
+        let key = manifest_key(&v.selected().unwrap());
+        let now = Instant::now();
+        assert!(v.needs_fetch(&key, now));
+        v.manifest_loaded(key.clone(), Err("offline".into()), now);
+        assert!(!v.needs_fetch(&key, now + Duration::from_secs(5)));
+        assert!(v.needs_fetch(&key, now + Duration::from_secs(31)));
+        v.manifest_loaded(key.clone(), Ok(Manifest { version: "1".into(), build: vec![], startup: vec![] }), now);
+        assert!(!v.needs_fetch(&key, now + Duration::from_secs(3600)));
+    }
+
+    #[test]
+    fn update_only_when_the_index_has_a_newer_commit() {
+        let mut v = view();
+        select(&mut v, "annotate");
+        let head = v.selected().unwrap().head_commit;
+        let choices = |v: &mut BrowseView| {
+            v.key(KeyCode::Enter);
+            let found = match &v.mode {
+                Mode::Confirm { choices, .. } => choices.clone(),
+                _ => vec![],
+            };
+            v.key(KeyCode::Esc);
+            found
+        };
+        v.installed[0].commit = Some(head.clone());
+        assert_eq!(choices(&mut v), [Job::Uninstall]);
+        v.installed[0].commit = Some("0000000".into());
+        assert_eq!(choices(&mut v), [Job::Update, Job::Uninstall]);
+        // Following another branch: the index only knows the default one, so it cannot tell.
+        v.installed[0].commit = Some(head);
+        v.installed[0].git_ref = Some("dev".into());
+        assert_eq!(choices(&mut v), [Job::Update, Job::Uninstall]);
     }
 
     #[test]

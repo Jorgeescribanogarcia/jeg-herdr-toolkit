@@ -2,7 +2,7 @@ id = "jeg-herdr-toolkit"
 name = "herdr toolkit"
 version = "0.1.0"
 min_herdr_version = "0.9.5"
-description = "File viewer, agent status icons, clipboard paste, a plugin marketplace and a settings panel for herdr"
+description = "Built-in plugin marketplace with automatic update checks, a git-aware file viewer with Markdown and code preview, agent status icons in the sidebar, paste copied files and screenshots as paths, and a settings panel for all of it"
 platforms = ["windows"]
 
 # A Cargo workspace: builds every executable (viewer, status icons, settings, paste, marketplace) into

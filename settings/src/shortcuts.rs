@@ -235,6 +235,7 @@ mod tests {
     fn free_does_not_clash() {
         assert!(clashes("prefix+.", "", DEFAULTS, PLUGIN).is_empty());
         assert!(clashes("prefix+ctrl+f", "", DEFAULTS, PLUGIN).is_empty());
+        assert!(clashes("prefix+m", "", DEFAULTS, PLUGIN).is_empty());
     }
 
     #[test]

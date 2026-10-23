@@ -6,6 +6,7 @@ pub mod icon_sets;
 pub mod publish;
 pub mod settings;
 pub mod state;
+pub mod theme;
 
 pub use icon_sets::{ICON_SETS, IconSet};
 pub use settings::Settings;

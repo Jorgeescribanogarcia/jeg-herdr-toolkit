@@ -1,0 +1,67 @@
+{
+  "id": "cli:plugin",
+  "result": {
+    "type": "plugin_list",
+    "plugins": [
+      {
+        "plugin_id": "herdr-file-viewer",
+        "name": "herdr-file-viewer",
+        "version": "1.18.0",
+        "enabled": true,
+        "build": [
+          { "command": ["/bin/sh", "scripts/fetch-or-build.sh"], "platforms": ["linux", "macos"] },
+          { "command": ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/fetch-or-build.ps1"], "platforms": ["windows"] }
+        ],
+        "startup": [],
+        "source": {
+          "kind": "github",
+          "owner": "smarzban",
+          "repo": "herdr-file-viewer",
+          "resolved_commit": "28f11cce5b9ed02cabe8b5c61756e2ed3b7ac4ff",
+          "installed_unix_ms": 1792779691826,
+          "managed_path": "C:\\Users\\me\\AppData\\Roaming\\herdr\\plugins\\github-installations\\herdr-file-viewer-c993314e2614\\1-0\\checkout"
+        }
+      },
+      {
+        "plugin_id": "pinned-viewer",
+        "name": "Pinned viewer",
+        "version": "1.18.0",
+        "enabled": true,
+        "build": [],
+        "startup": [],
+        "source": {
+          "kind": "github",
+          "owner": "someone",
+          "repo": "pinned",
+          "requested_ref": "28f11cce5b9ed02cabe8b5c61756e2ed3b7ac4ff",
+          "resolved_commit": "28f11cce5b9ed02cabe8b5c61756e2ed3b7ac4ff"
+        }
+      },
+      {
+        "plugin_id": "branch-tool",
+        "name": "Branch tool",
+        "version": "0.3.0",
+        "enabled": true,
+        "build": [{ "command": ["cargo", "build", "--release"] }],
+        "startup": [{ "command": ["target/release/tool.exe", "daemon"] }],
+        "source": {
+          "kind": "github",
+          "owner": "someone",
+          "repo": "tools",
+          "subdir": "plugins/branch-tool",
+          "requested_ref": "dev",
+          "resolved_commit": "1111111111111111111111111111111111111111"
+        }
+      },
+      {
+        "plugin_id": "jeg-herdr-toolkit",
+        "name": "herdr toolkit",
+        "version": "0.1.0",
+        "enabled": true,
+        "build": [{ "command": ["cargo", "build", "--release"] }],
+        "startup": [{ "command": ["target/release/herdr-status.exe"] }],
+        "source": { "kind": "local" }
+      }
+    ]
+  }
+}

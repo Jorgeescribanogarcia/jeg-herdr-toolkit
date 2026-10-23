@@ -1,0 +1,215 @@
+{
+ "schemaVersion": 1,
+ "generatedAt": "2026-10-23T17:30:04.683Z",
+ "pluginCount": 1883,
+ "repositoryCount": 1823,
+ "source": {
+  "provider": "github",
+  "query": "topic:herdr-plugin is:public",
+  "totalCount": 1888,
+  "collectedCount": 1888,
+  "blacklistedCount": 2,
+  "missingManifestCount": 42,
+  "invalidManifestCount": 3,
+  "duplicateManifestCount": 7,
+  "skippedRepositoryCount": 0,
+  "unavailableRepositoryCount": 1,
+  "truncated": false
+ },
+ "plugins": [
+  {
+   "id": 1328358094,
+   "fullName": "plannotator/herdr-annotate",
+   "owner": "plannotator",
+   "name": "herdr-annotate",
+   "description": "Annotate terminal text, review documents and agent replies in Herdr, and send the feedback straight back to the agent.",
+   "url": "https://github.com/plannotator/herdr-annotate",
+   "stars": 696,
+   "forks": 24,
+   "openIssues": 10,
+   "language": "Rust",
+   "topics": [
+    "annotation",
+    "herdr",
+    "herdr-plugin",
+    "multiplexer"
+   ],
+   "createdAt": "2026-08-09T02:34:40Z",
+   "updatedAt": "2026-10-23T16:52:54Z",
+   "pushedAt": "2026-10-15T23:00:30Z",
+   "headCommit": "c5e565e9bdbb52d152ad15169f38ed8bae31b610",
+   "manifests": [
+    {
+     "path": "herdr-plugin.toml",
+     "id": "annotate",
+     "name": "Annotate",
+     "version": "0.9.1",
+     "minHerdrVersion": "0.8.0",
+     "description": "Comment on terminal selections and copy annotations as agent context.",
+     "platforms": [
+      "linux",
+      "macos",
+      "windows"
+     ]
+    },
+    {
+     "path": "links/herdr-plugin.toml",
+     "id": "annotate-links",
+     "name": "Annotate Links",
+     "version": "0.9.1",
+     "minHerdrVersion": "0.8.0",
+     "description": "Open Ctrl-clicked file:// Markdown links in Annotate (needs the Annotate Full plugin).",
+     "platforms": [
+      "linux",
+      "macos",
+      "windows"
+     ]
+    }
+   ],
+   "firstSeenAt": "2026-08-27T15:31:33.789Z",
+   "starsDelta7d": 30,
+   "starsDelta30d": 155
+  },
+  {
+   "id": 1357781070,
+   "fullName": "zlj-zz/herdr-harbor",
+   "owner": "zlj-zz",
+   "name": "herdr-harbor",
+   "description": null,
+   "url": "https://github.com/zlj-zz/herdr-harbor",
+   "stars": 0,
+   "forks": 0,
+   "openIssues": 0,
+   "language": "Rust",
+   "topics": [
+    "herdr",
+    "herdr-plugin"
+   ],
+   "createdAt": "2026-09-05T03:08:08Z",
+   "updatedAt": "2026-09-08T06:11:06Z",
+   "pushedAt": "2026-09-08T06:11:20Z",
+   "headCommit": "f081d00d7861f12bd391e8faf268aabce42ee114",
+   "manifests": [
+    {
+     "path": "herdr-plugin.toml",
+     "id": "herdr.harbor",
+     "name": "Harbor",
+     "version": "0.3.1",
+     "minHerdrVersion": "0.8.2",
+     "description": null,
+     "platforms": [
+      "macos",
+      "linux"
+     ]
+    }
+   ],
+   "firstSeenAt": "2026-09-05T03:30:52.351Z",
+   "starsDelta7d": 0,
+   "starsDelta30d": 0
+  },
+  {
+   "id": 1291255325,
+   "fullName": "zenbu-labs/terminal-browser",
+   "owner": "zenbu-labs",
+   "name": "terminal-browser",
+   "description": "A real browser inside your terminal",
+   "url": "https://github.com/zenbu-labs/terminal-browser",
+   "stars": 4178,
+   "forks": 203,
+   "openIssues": 104,
+   "language": "TypeScript",
+   "topics": [
+    "browser",
+    "claude-code",
+    "claude-code-plugin",
+    "claude-skills",
+    "cli",
+    "codex",
+    "herdr-plugin",
+    "rust",
+    "terminal",
+    "web"
+   ],
+   "createdAt": "2026-07-06T16:31:11Z",
+   "updatedAt": "2026-10-23T16:33:29Z",
+   "pushedAt": "2026-10-21T16:55:29Z",
+   "headCommit": "660ec51e0ec0e5172338a2920e50089943882af4",
+   "manifests": [
+    {
+     "path": "herdr-plugin/herdr-plugin.toml",
+     "id": "zenbu-labs.terminal-browser",
+     "name": "Terminal Browser",
+     "version": "0.1.1",
+     "minHerdrVersion": "0.8.2",
+     "description": "Open a browser inside herdr",
+     "platforms": [
+      "linux",
+      "macos"
+     ]
+    }
+   ],
+   "firstSeenAt": "2026-08-11T04:31:10.754Z",
+   "starsDelta7d": 292,
+   "starsDelta30d": 977
+  },
+  {
+   "id": 1333673585,
+   "fullName": "waynewu411/herdr-event-log",
+   "owner": "waynewu411",
+   "name": "herdr-event-log",
+   "description": "Herdr plugin: logs pane.agent_status_changed (and future event types) to a durable, cursor-resumable global log any parent agent can tail.",
+   "url": "https://github.com/waynewu411/herdr-event-log",
+   "stars": 0,
+   "forks": 0,
+   "openIssues": 3,
+   "language": "Go",
+   "topics": [
+    "herdr-plugin"
+   ],
+   "createdAt": "2026-08-14T01:18:06Z",
+   "updatedAt": "2026-10-19T22:40:01Z",
+   "pushedAt": "2026-10-20T21:23:43Z",
+   "headCommit": "79d300ad1546d49f5b95f16d466ae1cdf6051578",
+   "manifests": [
+    {
+     "path": "herdr-plugin.toml",
+     "id": "waynewu411.herdr-event-log",
+     "name": "Herdr Event Log",
+     "version": "0.1.0",
+     "minHerdrVersion": "0.7.0",
+     "description": null,
+     "platforms": null
+    }
+   ],
+   "firstSeenAt": "2026-08-15T00:30:41.305Z",
+   "starsDelta7d": 0,
+   "starsDelta30d": 0
+  },
+  {
+   "id": 1328358094,
+   "fullName": "someone/empty-repo",
+   "owner": "plannotator",
+   "name": "herdr-annotate",
+   "description": "Annotate terminal text, review documents and agent replies in Herdr, and send the feedback straight back to the agent.",
+   "url": "https://github.com/plannotator/herdr-annotate",
+   "stars": 696,
+   "forks": 24,
+   "openIssues": 10,
+   "language": "Rust",
+   "topics": [
+    "annotation",
+    "herdr",
+    "herdr-plugin",
+    "multiplexer"
+   ],
+   "createdAt": "2026-08-09T02:34:40Z",
+   "updatedAt": "2026-10-23T16:52:54Z",
+   "pushedAt": "2026-10-15T23:00:30Z",
+   "headCommit": "c5e565e9bdbb52d152ad15169f38ed8bae31b610",
+   "manifests": [],
+   "firstSeenAt": "2026-08-27T15:31:33.789Z",
+   "starsDelta7d": 30,
+   "starsDelta30d": 155
+  }
+ ]
+}

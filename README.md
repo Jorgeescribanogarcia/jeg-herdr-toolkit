@@ -1,18 +1,21 @@
 # jeg-herdr-toolkit
 
-A [herdr](https://herdr.dev) plugin with four pieces that live inside herdr:
+A [herdr](https://herdr.dev) plugin with five pieces that live inside herdr:
 
 - **File viewer** in a herdr pane: a tree with Material Icon Theme icons and VS Code–style git
   status, plus a Markdown and code preview.
 - **Agent status icons** in the sidebar, with several icon sets and colours to choose from.
 - **Paste as paths**: files copied in Explorer, or an image from the clipboard, typed into the active
   pane as paths that agents such as Claude Code can read.
+- **Plugin marketplace and updates**: browse and install community plugins without leaving herdr,
+  and get offered updates for the plugins you installed from GitHub.
 - **Settings panel** to change all of the above and the shortcuts, with keyboard or mouse.
 
 ## Requirements
 
 - herdr ≥ 0.9.5, on **Windows** (the plugin declares `platforms = ["windows"]`).
 - [Rust](https://rustup.rs) (`cargo`): herdr builds the plugin when installing it.
+- `git` on the `PATH` (herdr needs it too): the update check uses `git ls-remote`.
 - A [Nerd Font](https://www.nerdfonts.com) 3.x in the terminal, for the icons (the “Text” status
   icon set works without one).
 - Optional, for the preview: [`glow`](https://github.com/charmbracelet/glow) (Markdown) and
@@ -42,6 +45,7 @@ A Cargo workspace:
 | `viewer/` | File viewer (`herdr-viewer`). |
 | `status/` | Agent status icons in the sidebar (`herdr-status`). |
 | `paste/` | Paste clipboard files or image as paths (`herdr-paste`). |
+| `market/` | Plugin marketplace explorer and update check (`herdr-market`). |
 | `settings/` | Settings panel (`herdr-settings`). |
 
 ## Shortcuts
@@ -52,8 +56,9 @@ A Cargo workspace:
 | `prefix+f` | Viewer popup (`q` or `Esc` close it) |
 | `prefix+.` | Settings panel |
 | `prefix+i` | Paste clipboard files or image as paths |
+| `prefix+m` | Plugin marketplace |
 
-All four can be changed from the panel itself.
+All five can be changed from the panel itself.
 
 ## File viewer
 
@@ -124,14 +129,54 @@ notification says so; use the normal paste for text.
 Dragging a file onto the terminal is handled by the terminal itself (Windows Terminal types its path),
 not by herdr or its plugins.
 
+## Plugin marketplace and updates
+
+**Explorer** (`prefix+m`, a popup): the plugins listed on herdr's marketplace, read from the same
+public index its website uses (`https://assets.herdr.dev/plugins/index.json`, refreshed every 30
+minutes by herdr). No GitHub account or token is needed.
+
+- `/` searches by name, description or author; `s` changes the order (newest in the index, most
+  stars, recently active); `o` opens the repo in the browser.
+- **NEW** marks what entered the index since the explorer was last opened; **✓ installed**, what you
+  already have. Plugins whose manifest leaves Windows out are hidden (or greyed out and not
+  installable, if shown).
+- The details show what the selected plugin **runs**: its `[[build]]` commands (on install) and its
+  `[[startup]]` commands (on every herdr start), only those that apply to Windows. They are read from
+  the plugin's `herdr-plugin.toml` at the listed commit.
+- `Enter` installs (after a confirmation that repeats what it runs, read at the branch's current
+  commit; it cannot be confirmed until those commands have loaded), or, on an installed plugin,
+  updates or uninstalls it. A fork that reuses a plugin's id is not taken for the installed one: the
+  repo has to match too. The work is done by herdr's own `herdr plugin install`, `update` and
+  `uninstall`.
+- The index is kept for 15 minutes in the plugin's state folder; without network the last copy is
+  shown, and the title says so.
+
+**Updates window** (a popup that opens by itself): for every plugin installed **from GitHub**, the
+installed commit is compared with the one its branch points to now (`git ls-remote`, nothing is
+downloaded). If any has a newer commit, the window lists them, all marked; `Space` unmarks one, `a`
+marks all or none, `Enter` updates the marked ones (`herdr plugin update`) and `Esc` cancels.
+
+- **When:** at herdr startup, and again while herdr stays open once the interval set in the panel
+  has passed (6 h by default). There is no resident process: the check rides on herdr's focus events
+  (workspace, tab, pane) and returns at once while the interval has not passed.
+- **Not offered:** plugins linked from a local folder (`herdr plugin link`), plugins installed at a
+  fixed commit or tag, and updates you cancelled or left unmarked, until the plugin publishes a newer
+  commit or herdr restarts.
+- **⚠** marks an update whose new version builds or starts something different; selecting it shows
+  the new commands.
+- No network, or another herdr window open for two minutes: nothing is shown; the reason goes to the
+  plugin log.
+
 ## Settings panel
 
-A popup with four sections: **Icons** (set and icon per state), **Colours**, **Viewer** (popup size,
-tree width, git-ignored files, refresh interval) and **Shortcuts** (all four actions). Changes show in the sidebar at
+A popup with five sections: **Icons** (set and icon per state), **Colours**, **Viewer** (popup size,
+tree width, git-ignored files, refresh interval), **Shortcuts** (all five actions) and
+**Marketplace** (check at startup, check interval, mark all updates by default, the explorer's default
+order, hide non-Windows plugins, hide installed ones). Changes show in the sidebar at
 once; `u` goes back to what there was when the panel was opened.
 
 With the mouse: click a section; click an option to select it and click again to change it (right
-click changes backwards; on the icon set, click `◀`); wheel to move. With the keyboard: `1`-`4` or
+click changes backwards; on the icon set, click `◀`); wheel to move. With the keyboard: `1`-`5` or
 `Tab` for the section, `↑↓` the option, `←→` the value, `Enter` to edit or capture a shortcut.
 
 A status icon can follow its set or be custom. To go back from a custom icon to the set's: `⌫`, `Enter`

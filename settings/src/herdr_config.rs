@@ -8,11 +8,12 @@ use toml_edit::{ArrayOfTables, DocumentMut, Item, Table, Value, value};
 
 /// Plugin actions with a shortcut: (action id, description herdr will show).
 /// Same order as `Shortcuts::all`.
-const ACTIONS: [(&str, &str); 4] = [
+const ACTIONS: [(&str, &str); 5] = [
     ("viewer", "file viewer on the right"),
     ("viewer-popup", "file viewer popup"),
     ("settings", "herdr toolkit settings"),
     ("paste", "paste clipboard files or image as paths"),
+    ("marketplace", "plugin marketplace"),
 ];
 
 /// Returns the new `config.toml`. `plugin` is the plugin id (`jeg-herdr-toolkit`).
@@ -178,7 +179,7 @@ description = "from another plugin"
             bindings.iter().filter(|t| t["command"].as_str() == Some("jeg-herdr-toolkit.viewer-popup")).collect();
         assert_eq!(popups.len(), 1);
         assert_eq!(popups[0]["key"].as_str(), Some("prefix+g"));
-        assert_eq!(bindings.len(), 5); // the foreign one and the plugin's four
+        assert_eq!(bindings.len(), 6); // the foreign one and the plugin's five
     }
 
     #[test]
@@ -194,7 +195,8 @@ description = "from another plugin"
         let doc: DocumentMut = apply("", &Settings::default(), PLUGIN).unwrap().parse().unwrap();
         let bindings = doc["keys"]["command"].as_array_of_tables().unwrap();
         let keys: Vec<_> = bindings.iter().map(|t| t["key"].as_str().unwrap().to_string()).collect();
-        assert_eq!(keys, ["prefix+ctrl+f", "prefix+f", "prefix+.", "prefix+i"]);
+        assert_eq!(keys, ["prefix+ctrl+f", "prefix+f", "prefix+.", "prefix+i", "prefix+m"]);
+        assert_eq!(bindings.iter().last().unwrap()["command"].as_str(), Some("jeg-herdr-toolkit.marketplace"));
     }
 
     #[test]

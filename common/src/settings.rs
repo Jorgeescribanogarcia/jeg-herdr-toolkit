@@ -19,6 +19,7 @@ pub struct Settings {
     pub colors: BTreeMap<State, Color>,
     pub viewer: Viewer,
     pub shortcuts: Shortcuts,
+    pub marketplace: Marketplace,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -58,6 +59,36 @@ pub struct Shortcuts {
     pub viewer_popup: String,
     pub settings: String,
     pub paste: String,
+    pub marketplace: String,
+}
+
+/// How often the update check may run again while herdr stays open, in hours; 0 turns it off.
+pub const CHECK_INTERVALS: [u8; 6] = [0, 1, 3, 6, 12, 24];
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Marketplace {
+    pub check_at_startup: bool,
+    /// One of `CHECK_INTERVALS`.
+    pub check_every_hours: u8,
+    /// Whether the updates window starts with every update marked.
+    pub mark_all: bool,
+    /// The explorer's order when it opens.
+    pub sort: Sort,
+    /// Plugins whose `platforms` leave Windows out.
+    pub hide_other_platforms: bool,
+    pub hide_installed: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Sort {
+    /// When the plugin entered herdr's index.
+    Newest,
+    /// Stars.
+    Popular,
+    /// Last push.
+    Active,
 }
 
 impl Default for Settings {
@@ -67,6 +98,7 @@ impl Default for Settings {
             colors: State::ALL.iter().map(|&s| (s, default_color(s))).collect(),
             viewer: Viewer::default(),
             shortcuts: Shortcuts::default(),
+            marketplace: Marketplace::default(),
         }
     }
 }
@@ -90,14 +122,29 @@ impl Default for Shortcuts {
             viewer_popup: "prefix+f".into(),
             settings: "prefix+.".into(),
             paste: "prefix+i".into(),
+            marketplace: "prefix+m".into(),
+        }
+    }
+}
+
+impl Default for Marketplace {
+    fn default() -> Marketplace {
+        Marketplace {
+            check_at_startup: true,
+            check_every_hours: 6,
+            mark_all: true,
+            sort: Sort::Newest,
+            hide_other_platforms: true,
+            hide_installed: false,
         }
     }
 }
 
 impl Shortcuts {
-    /// In the order of the plugin's actions: viewer on the right, viewer popup, settings, paste.
-    pub fn all(&self) -> [&str; 4] {
-        [&self.viewer_side, &self.viewer_popup, &self.settings, &self.paste]
+    /// In the order of the plugin's actions: viewer on the right, viewer popup, settings, paste,
+    /// marketplace.
+    pub fn all(&self) -> [&str; 5] {
+        [&self.viewer_side, &self.viewer_popup, &self.settings, &self.paste, &self.marketplace]
     }
 
     /// `index` in the order of `all`.
@@ -106,7 +153,8 @@ impl Shortcuts {
             0 => &mut self.viewer_side,
             1 => &mut self.viewer_popup,
             2 => &mut self.settings,
-            _ => &mut self.paste,
+            3 => &mut self.paste,
+            _ => &mut self.marketplace,
         };
         *slot = shortcut;
     }
@@ -130,6 +178,33 @@ impl Settings {
             Ok(()) => (settings, None),
             Err(e) => (Settings::default(), Some(format!("{} is not valid: {e}", path.display()))),
         }
+    }
+
+    /// Only `[marketplace]`, for the update-check hooks. With `load`, one bad shortcut elsewhere would
+    /// bring back the defaults and switch on checks the user had turned off; here only this table counts.
+    /// A missing file or table gives the defaults; an invalid table is an error, so the hooks do nothing.
+    pub fn load_marketplace(dir: &Path) -> Result<Marketplace, String> {
+        let path = dir.join(FILE);
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Marketplace::default()),
+            Err(e) => return Err(format!("could not read {}: {e}", path.display())),
+        };
+        #[derive(Deserialize)]
+        struct OnlyMarketplace {
+            #[serde(default)]
+            marketplace: Marketplace,
+        }
+        let m = toml::from_str::<OnlyMarketplace>(&text)
+            .map_err(|e| format!("{} is malformed: {e}", path.display()))?
+            .marketplace;
+        if !CHECK_INTERVALS.contains(&m.check_every_hours) {
+            return Err(format!(
+                "the update check interval ({} h) must be one of {CHECK_INTERVALS:?}",
+                m.check_every_hours
+            ));
+        }
+        Ok(m)
     }
 
     pub fn save(&self, dir: &Path) -> io::Result<()> {
@@ -162,6 +237,12 @@ impl Settings {
         }
         if !(1..=60).contains(&v.refresh_secs) {
             return Err("the refresh interval must be between 1 and 60 s".into());
+        }
+        if !CHECK_INTERVALS.contains(&self.marketplace.check_every_hours) {
+            return Err(format!(
+                "the update check interval ({} h) must be one of {CHECK_INTERVALS:?}",
+                self.marketplace.check_every_hours
+            ));
         }
         let shortcuts = self.shortcuts.all();
         if shortcuts.iter().any(|s| s.is_empty()) {
@@ -232,7 +313,65 @@ mod tests {
         assert_eq!(s.shortcuts.viewer_popup, "prefix+f");
         assert_eq!(s.shortcuts.settings, "prefix+.");
         assert_eq!(s.shortcuts.paste, "prefix+i");
+        assert_eq!(s.shortcuts.marketplace, "prefix+m");
+        assert_eq!(
+            s.marketplace,
+            Marketplace {
+                check_at_startup: true,
+                check_every_hours: 6,
+                mark_all: true,
+                sort: Sort::Newest,
+                hide_other_platforms: true,
+                hide_installed: false,
+            }
+        );
         assert_eq!(s.validate(), Ok(()));
+    }
+
+    #[test]
+    fn marketplace_survives_an_invalid_shortcut() {
+        let dir = folder("marketplace-alone");
+        // Two actions with the same shortcut make the whole file invalid...
+        fs::write(
+            dir.join(FILE),
+            "[shortcuts]\nsettings = \"prefix+f\"\n[marketplace]\ncheck_at_startup = false\ncheck_every_hours = 0\n",
+        )
+        .unwrap();
+        assert!(Settings::load(&dir).1.is_some());
+        // ...but the update check still honours the user's choice to turn it off.
+        let m = Settings::load_marketplace(&dir).unwrap();
+        assert!(!m.check_at_startup);
+        assert_eq!(m.check_every_hours, 0);
+        // An invalid [marketplace] itself is an error, not the defaults.
+        fs::write(dir.join(FILE), "[marketplace]\ncheck_every_hours = 300\n").unwrap();
+        assert!(Settings::load_marketplace(&dir).is_err());
+        // No file: the defaults.
+        assert_eq!(Settings::load_marketplace(&folder("marketplace-none")).unwrap(), Marketplace::default());
+    }
+
+    #[test]
+    fn invalid_interval() {
+        let mut s = Settings::default();
+        s.marketplace.check_every_hours = 5;
+        assert!(s.validate().is_err());
+    }
+
+    #[test]
+    fn old_file_without_marketplace() {
+        let dir = folder("no-marketplace");
+        fs::write(
+            dir.join(FILE),
+            "[viewer]
+refresh_secs = 3
+[shortcuts]
+settings = \"prefix+.\"
+",
+        )
+        .unwrap();
+        let (s, warning) = Settings::load(&dir);
+        assert_eq!(warning, None);
+        assert_eq!(s.marketplace, Marketplace::default());
+        assert_eq!(s.shortcuts.marketplace, "prefix+m");
     }
 
     #[test]

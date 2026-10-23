@@ -8,8 +8,8 @@ use std::io;
 use std::time::{Duration, Instant};
 
 use common::publish::label;
-use common::settings::Color as SettingsColor;
-use common::{ICON_SETS, Settings, State};
+use common::settings::{CHECK_INTERVALS, Color as SettingsColor, Marketplace, Sort};
+use common::{ICON_SETS, Settings, State, theme};
 use ratatui::DefaultTerminal;
 use ratatui::Frame;
 use ratatui::crossterm::event::{
@@ -28,12 +28,15 @@ use crate::shortcuts::{clashes, key_to_herdr};
 
 const DELAY: Duration = Duration::from_millis(500);
 
-const TEXT: Color = Color::Rgb(0xab, 0xb2, 0xbf);
-const DIM: Color = Color::Rgb(0x5c, 0x63, 0x70);
-const ACCENT: Color = Color::Rgb(0x61, 0xaf, 0xef);
-const ERROR: Color = Color::Rgb(0xe0, 0x6c, 0x75);
-const OK: Color = Color::Rgb(0x98, 0xc3, 0x79);
-const SELECTION_BG: Color = Color::Rgb(0x2c, 0x31, 0x3c);
+const fn rgb(c: [u8; 3]) -> Color {
+    Color::Rgb(c[0], c[1], c[2])
+}
+const TEXT: Color = rgb(theme::TEXT);
+const DIM: Color = rgb(theme::DIM);
+const ACCENT: Color = rgb(theme::ACCENT);
+const ERROR: Color = rgb(theme::ERROR);
+const OK: Color = rgb(theme::OK);
+const SELECTION_BG: Color = rgb(theme::SELECTION_BG);
 
 /// One Dark.
 const PALETTE: &[&str] =
@@ -48,8 +51,11 @@ fn suggestions() -> Vec<char> {
     all
 }
 
-const SECTIONS: [&str; 4] = ["Icons", "Colours", "Viewer", "Shortcuts"];
-const SHORTCUTS: [&str; 4] = ["Viewer on the right", "Viewer popup", "This panel", "Paste files / image"];
+const SECTIONS: [&str; 5] = ["Icons", "Colours", "Viewer", "Shortcuts", "Marketplace"];
+const SHORTCUTS: [&str; 5] =
+    ["Viewer on the right", "Viewer popup", "This panel", "Paste files / image", "Marketplace"];
+const MARKETPLACE_ROWS: [&str; 6] =
+    ["Check at startup", "Also check every", "Mark all updates", "Default sort", "Hide non-Windows", "Hide installed"];
 
 enum Mode {
     Normal,
@@ -177,7 +183,8 @@ impl Panel<'_> {
             0 => 1 + State::ALL.len(),
             1 => State::ALL.len(),
             2 => 5,
-            _ => SHORTCUTS.len(),
+            3 => SHORTCUTS.len(),
+            _ => MARKETPLACE_ROWS.len(),
         }
     }
 
@@ -200,7 +207,7 @@ impl Panel<'_> {
             KeyCode::Down | KeyCode::Char('j') => self.row = (self.row + 1).min(last),
             KeyCode::Tab => self.go_to_section((self.section + 1) % SECTIONS.len()),
             KeyCode::BackTab => self.go_to_section((self.section + SECTIONS.len() - 1) % SECTIONS.len()),
-            KeyCode::Char(c @ '1'..='4') => self.go_to_section(c as usize - '1' as usize),
+            KeyCode::Char(c @ '1'..='5') => self.go_to_section(c as usize - '1' as usize),
             KeyCode::Left | KeyCode::Char('h') => self.adjust(-1),
             KeyCode::Right | KeyCode::Char('l') => self.adjust(1),
             KeyCode::Enter => self.edit(),
@@ -308,6 +315,7 @@ impl Panel<'_> {
             (2, 2) => self.change(|s| s.viewer.tree_width = add(s.viewer.tree_width, step * 5, 20, 60)),
             (2, 3) => self.change(|s| s.viewer.show_ignored = !s.viewer.show_ignored),
             (2, 4) => self.change(|s| s.viewer.refresh_secs = add(s.viewer.refresh_secs as u8, step, 1, 60).into()),
+            (4, row) => self.change(|s| adjust_marketplace(&mut s.marketplace, row, step)),
             _ => {}
         }
     }
@@ -318,7 +326,7 @@ impl Panel<'_> {
             (0, 0) => return self.adjust(1),
             (0, row) => Mode::Typing { field: Field::Glyph(State::ALL[row - 1]), text: String::new() },
             (1, row) => Mode::Typing { field: Field::Color(State::ALL[row]), text: String::new() },
-            (2, _) => return self.adjust(1),
+            (2, _) | (4, _) => return self.adjust(1),
             (_, which) => Mode::Capturing { which, with_prefix: true, candidate: None },
         };
     }
@@ -338,6 +346,7 @@ impl Panel<'_> {
                     s.colors.remove(&state);
                 });
             }
+            (4, row) => self.change(|s| reset_marketplace(&mut s.marketplace, row)),
             _ => {}
         }
     }
@@ -409,7 +418,7 @@ impl Panel<'_> {
         ]);
         f.render_widget(Paragraph::new(title).block(Block::new().borders(Borders::BOTTOM).border_style(DIM)), header);
 
-        let [menu, options] = Layout::horizontal([Constraint::Length(16), Constraint::Fill(1)]).areas(body);
+        let [menu, options] = Layout::horizontal([Constraint::Length(18), Constraint::Fill(1)]).areas(body);
         self.menu_area.set(menu);
         self.options_area.set(options.inner(ratatui::layout::Margin::new(1, 0)));
         let lines: Vec<Line> = SECTIONS
@@ -460,7 +469,7 @@ impl Panel<'_> {
                 ACCENT,
             ),
             _ => (
-                " Click or 1-4: section · click: select and change (right: back) · ↑↓ ←→ ⏎ · ⌫ default · u undo · q close"
+                " Click or 1-5: section · click: select and change (right: back) · ↑↓ ←→ ⏎ · ⌫ default · u undo · q close"
                     .into(),
                 DIM,
             ),
@@ -507,11 +516,12 @@ impl Panel<'_> {
                     values.push(vec![Span::raw(text)]);
                 }
             }
-            _ => {
+            3 => {
                 for shortcut in s.shortcuts.all() {
                     values.push(vec![Span::raw(shortcut.to_string())]);
                 }
             }
+            _ => values.extend(marketplace_values(&s.marketplace).map(|v| vec![Span::raw(format!("◀ {v} ▶"))])),
         }
         let names: Vec<String> = match self.section {
             0 => std::iter::once("Style".to_string()).chain(State::ALL.iter().map(|s| s.label().to_string())).collect(),
@@ -519,7 +529,8 @@ impl Panel<'_> {
             2 => ["Popup width", "Popup height", "Tree width", "Ignored by git", "Re-read every"]
                 .map(String::from)
                 .to_vec(),
-            _ => SHORTCUTS.map(String::from).to_vec(),
+            3 => SHORTCUTS.map(String::from).to_vec(),
+            _ => MARKETPLACE_ROWS.map(String::from).to_vec(),
         };
         let mut lines: Vec<Line> = names
             .into_iter()
@@ -552,6 +563,54 @@ fn style_of(color: &SettingsColor) -> Style {
     let rgb = u32::from_str_radix(color.hex.trim_start_matches('#'), 16).unwrap_or(0xabb2bf);
     let style = Style::new().fg(Color::Rgb((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8));
     if color.bold { style.add_modifier(Modifier::BOLD) } else { style }
+}
+
+/// ←→ on a row of the Marketplace section (in `MARKETPLACE_ROWS` order): yes/no flips, the interval and
+/// the order go round their values.
+fn adjust_marketplace(m: &mut Marketplace, row: usize, step: i32) {
+    const SORTS: [Sort; 3] = [Sort::Newest, Sort::Popular, Sort::Active];
+    let next = |i: usize, n: usize| (i as i32 + step).rem_euclid(n as i32) as usize;
+    match row {
+        0 => m.check_at_startup = !m.check_at_startup,
+        1 => {
+            let i = CHECK_INTERVALS.iter().position(|&h| h == m.check_every_hours).unwrap_or(0);
+            m.check_every_hours = CHECK_INTERVALS[next(i, CHECK_INTERVALS.len())];
+        }
+        2 => m.mark_all = !m.mark_all,
+        3 => m.sort = SORTS[next(SORTS.iter().position(|&s| s == m.sort).unwrap_or(0), SORTS.len())],
+        4 => m.hide_other_platforms = !m.hide_other_platforms,
+        _ => m.hide_installed = !m.hide_installed,
+    }
+}
+
+/// ⌫ on a row of the Marketplace section: that row's default.
+fn reset_marketplace(m: &mut Marketplace, row: usize) {
+    let d = Marketplace::default();
+    match row {
+        0 => m.check_at_startup = d.check_at_startup,
+        1 => m.check_every_hours = d.check_every_hours,
+        2 => m.mark_all = d.mark_all,
+        3 => m.sort = d.sort,
+        4 => m.hide_other_platforms = d.hide_other_platforms,
+        _ => m.hide_installed = d.hide_installed,
+    }
+}
+
+fn marketplace_values(m: &Marketplace) -> [String; 6] {
+    let yes_no = |b: bool| if b { "yes" } else { "no" }.to_string();
+    [
+        if m.check_at_startup { "on" } else { "off" }.into(),
+        if m.check_every_hours == 0 { "off".into() } else { format!("{} h", m.check_every_hours) },
+        yes_no(m.mark_all),
+        match m.sort {
+            Sort::Newest => "newest",
+            Sort::Popular => "most stars",
+            Sort::Active => "recently active",
+        }
+        .into(),
+        yes_no(m.hide_other_platforms),
+        yes_no(m.hide_installed),
+    ]
 }
 
 fn add(value: u8, step: i32, min: u8, max: u8) -> u8 {
@@ -602,6 +661,37 @@ mod tests {
         set_glyph_from_text(&mut s, State::Working, "  ").unwrap();
         assert!(s.icons.overrides.is_empty());
         assert!(set_glyph_from_text(&mut s, State::Working, "zz").is_err());
+    }
+
+    #[test]
+    fn marketplace_interval_cycles_through_the_allowed_values() {
+        let mut m = Marketplace::default(); // 6 h
+        adjust_marketplace(&mut m, 1, 1);
+        assert_eq!(m.check_every_hours, 12);
+        adjust_marketplace(&mut m, 1, 1);
+        adjust_marketplace(&mut m, 1, 1);
+        assert_eq!(m.check_every_hours, 0);
+        adjust_marketplace(&mut m, 1, -1);
+        assert_eq!(m.check_every_hours, 24);
+        assert_eq!(marketplace_values(&Marketplace { check_every_hours: 0, ..m.clone() })[1], "off");
+    }
+
+    #[test]
+    fn marketplace_toggles_sort_and_reset() {
+        let mut m = Marketplace::default();
+        for row in [0, 2, 4, 5] {
+            adjust_marketplace(&mut m, row, 1);
+        }
+        assert!(!m.check_at_startup && !m.mark_all && !m.hide_other_platforms && m.hide_installed);
+        adjust_marketplace(&mut m, 3, 1);
+        assert_eq!(m.sort, Sort::Popular);
+        adjust_marketplace(&mut m, 3, -1);
+        adjust_marketplace(&mut m, 3, -1);
+        assert_eq!(m.sort, Sort::Active);
+        for row in 0..MARKETPLACE_ROWS.len() {
+            reset_marketplace(&mut m, row);
+        }
+        assert_eq!(m, Marketplace::default());
     }
 
     #[test]

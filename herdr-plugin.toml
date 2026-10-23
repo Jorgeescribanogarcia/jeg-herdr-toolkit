@@ -2,10 +2,11 @@ id = "jeg-herdr-toolkit"
 name = "herdr toolkit"
 version = "0.1.0"
 min_herdr_version = "0.9.5"
-description = "File viewer, agent status icons and a settings panel for herdr"
+description = "File viewer, agent status icons, clipboard paste, a plugin marketplace and a settings panel for herdr"
 platforms = ["windows"]
 
-# A Cargo workspace: builds the viewer, the status icons and the settings panel into target/release/.
+# A Cargo workspace: builds every executable (viewer, status icons, settings, paste, marketplace) into
+# target/release/.
 [[build]]
 command = ["cargo", "build", "--release"]
 
@@ -13,6 +14,24 @@ command = ["cargo", "build", "--release"]
 # and then on every change.
 [[startup]]
 command = ["target/release/herdr-status.exe"]
+
+# Plugin updates: checked at startup and, while herdr stays open, again once the interval set in the
+# settings has passed. There is no resident process: herdr's hooks are not supervised daemons, so the
+# check rides on focus events and returns at once while the interval has not passed.
+[[startup]]
+command = ["target/release/herdr-market.exe", "check", "--startup"]
+
+[[events]]
+on = "workspace.focused"
+command = ["target/release/herdr-market.exe", "check"]
+
+[[events]]
+on = "tab.focused"
+command = ["target/release/herdr-market.exe", "check"]
+
+[[events]]
+on = "pane.focused"
+command = ["target/release/herdr-market.exe", "check"]
 
 [[events]]
 on = "pane.agent_status_changed"
@@ -71,3 +90,21 @@ id = "paste"
 title = "Paste clipboard files or image as paths"
 contexts = ["workspace"]
 command = ["target/release/herdr-paste.exe"]
+
+[[actions]]
+id = "marketplace"
+title = "Plugin marketplace"
+contexts = ["workspace"]
+command = ["target/release/herdr-market.exe", "open"]
+
+[[panes]]
+id = "marketplace"
+title = "Marketplace"
+placement = "popup"
+command = ["target/release/herdr-market.exe"]
+
+[[panes]]
+id = "updates"
+title = "Plugin updates"
+placement = "popup"
+command = ["target/release/herdr-market.exe", "updates"]

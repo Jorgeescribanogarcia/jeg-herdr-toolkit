@@ -1,0 +1,10 @@
+[package]
+name = "herdr-settings"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+common = { version = "0.1.0", path = "../common" }
+ratatui = "0.30"
+serde_json = "1"
+toml_edit = "0.25"

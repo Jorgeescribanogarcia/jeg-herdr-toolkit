@@ -1,0 +1,63 @@
+id = "jeg-herdr-toolkit"
+name = "herdr toolkit"
+version = "0.1.0"
+min_herdr_version = "0.9.5"
+description = "File viewer, agent status icons and a settings panel for herdr"
+platforms = ["windows"]
+
+# A Cargo workspace: builds the viewer, the status icons and the settings panel into target/release/.
+[[build]]
+command = ["cargo", "build", "--release"]
+
+# Status icons: metadata tokens do not survive a herdr restart, so they are published at startup
+# and then on every change.
+[[startup]]
+command = ["target/release/herdr-status.exe"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["target/release/herdr-status.exe"]
+
+[[events]]
+on = "pane.agent_detected"
+command = ["target/release/herdr-status.exe"]
+
+# Closing a pane changes its workspace's roll-up.
+[[events]]
+on = "pane.closed"
+command = ["target/release/herdr-status.exe"]
+
+# The token carries the workspace name.
+[[events]]
+on = "workspace.renamed"
+command = ["target/release/herdr-status.exe"]
+
+[[actions]]
+id = "viewer"
+title = "File viewer on the right (opens or closes)"
+contexts = ["workspace"]
+command = ["target/release/herdr-viewer.exe", "open", "side"]
+
+[[actions]]
+id = "viewer-popup"
+title = "File viewer popup"
+contexts = ["workspace"]
+command = ["target/release/herdr-viewer.exe", "open", "popup"]
+
+[[actions]]
+id = "settings"
+title = "herdr toolkit settings"
+contexts = ["workspace"]
+command = ["target/release/herdr-settings.exe", "open"]
+
+[[panes]]
+id = "viewer"
+title = "Viewer"
+placement = "split"
+command = ["target/release/herdr-viewer.exe"]
+
+[[panes]]
+id = "settings"
+title = "Settings"
+placement = "popup"
+command = ["target/release/herdr-settings.exe"]

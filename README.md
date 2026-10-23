@@ -97,7 +97,8 @@ looked yet) · unknown 󰘥 `#4b5263`. Within a set the five icons must differ, 
 icon.
 
 - **When it updates:** at herdr startup (the values do not survive a restart) and on each event:
-  agent detected, state changed, pane closed and workspace renamed. Nothing runs in between. Each time
+  agent detected, state changed, pane closed, workspace created and workspace renamed. A workspace
+  without an agent gets just its name, with no icon. Nothing runs in between. Each time
   it goes over everything with what herdr reports *at that moment*, and tags the report with the read
   time (`--seq`) so an older one arriving late does not overwrite the good one.
 - **Why icon and name go together:** herdr separates each value of a row with « · », except its own

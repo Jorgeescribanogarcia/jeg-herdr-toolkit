@@ -27,7 +27,11 @@ command = ["target/release/herdr-status.exe"]
 on = "pane.closed"
 command = ["target/release/herdr-status.exe"]
 
-# The token carries the workspace name.
+# The token carries the workspace name, so a new or renamed workspace needs it published.
+[[events]]
+on = "workspace.created"
+command = ["target/release/herdr-status.exe"]
+
 [[events]]
 on = "workspace.renamed"
 command = ["target/release/herdr-status.exe"]

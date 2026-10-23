@@ -51,12 +51,18 @@ pub fn publish(herdr: &str, settings: &Settings) -> Result<(), Box<dyn Error>> {
 
     for w in workspaces {
         let Some(id) = w["workspace_id"].as_str() else { continue };
-        if workspaces_with_agent.contains(&id) {
+        let name = w["label"].as_str();
+        let value = if workspaces_with_agent.contains(&id) {
             // The workspace's agent_status is already herdr's roll-up of all its agents.
             let state = State::from_herdr(w["agent_status"].as_str().unwrap_or(""));
-            report(herdr, "workspace", id, Some(label(settings, state, w["label"].as_str())), &seq)?;
-        } else if w["tokens"].get(TOKEN).is_some() {
-            report(herdr, "workspace", id, None, &seq)?;
+            Some(label(settings, state, name))
+        } else {
+            // The token is the only thing on the space's first row: without an agent it still has
+            // to carry the name, or the row comes out empty and only the branch shows.
+            name.map(str::to_string)
+        };
+        if value.as_deref() != w["tokens"].get(TOKEN).and_then(Value::as_str) {
+            report(herdr, "workspace", id, value, &seq)?;
         }
     }
     Ok(())

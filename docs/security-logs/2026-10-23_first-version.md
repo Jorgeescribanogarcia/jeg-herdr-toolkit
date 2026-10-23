@@ -7,7 +7,8 @@ user configuration files.
 
 - **Processes run:** `herdr`, `git`, `glow` and `bat`, always with separate arguments and no shell.
   The paths they receive are absolute (they cannot start with `-`); a herdr workspace name goes inside
-  `status=…` after `--token`, so it cannot be taken as an option.
+  `status=…` after `--token`, so it cannot be taken as an option. This also holds for workspaces
+  without an agent, whose token is just the name.
 - **Files written:** `settings.toml` (the plugin's config folder) and herdr's `config.toml`. In the
   latter only `ui.sidebar.agents.rows`, `ui.sidebar.spaces.rows` and the `[[keys.command]]` entries
   whose `command` starts with `jeg-herdr-toolkit.` are touched (recognised by id, not by description).

@@ -60,6 +60,7 @@ pub struct Shortcuts {
     pub settings: String,
     pub paste: String,
     pub marketplace: String,
+    pub repair: String,
 }
 
 /// How often the update check may run again while herdr stays open, in hours; 0 turns it off.
@@ -123,6 +124,7 @@ impl Default for Shortcuts {
             settings: "prefix+.".into(),
             paste: "prefix+i".into(),
             marketplace: "prefix+m".into(),
+            repair: "prefix+a".into(),
         }
     }
 }
@@ -142,9 +144,9 @@ impl Default for Marketplace {
 
 impl Shortcuts {
     /// In the order of the plugin's actions: viewer on the right, viewer popup, settings, paste,
-    /// marketplace.
-    pub fn all(&self) -> [&str; 5] {
-        [&self.viewer_side, &self.viewer_popup, &self.settings, &self.paste, &self.marketplace]
+    /// marketplace, repair.
+    pub fn all(&self) -> [&str; 6] {
+        [&self.viewer_side, &self.viewer_popup, &self.settings, &self.paste, &self.marketplace, &self.repair]
     }
 
     /// `index` in the order of `all`.
@@ -154,7 +156,8 @@ impl Shortcuts {
             1 => &mut self.viewer_popup,
             2 => &mut self.settings,
             3 => &mut self.paste,
-            _ => &mut self.marketplace,
+            4 => &mut self.marketplace,
+            _ => &mut self.repair,
         };
         *slot = shortcut;
     }
@@ -314,6 +317,7 @@ mod tests {
         assert_eq!(s.shortcuts.settings, "prefix+.");
         assert_eq!(s.shortcuts.paste, "prefix+i");
         assert_eq!(s.shortcuts.marketplace, "prefix+m");
+        assert_eq!(s.shortcuts.repair, "prefix+a");
         assert_eq!(
             s.marketplace,
             Marketplace {

@@ -52,8 +52,8 @@ fn suggestions() -> Vec<char> {
 }
 
 const SECTIONS: [&str; 5] = ["Icons", "Colours", "Viewer", "Shortcuts", "Marketplace"];
-const SHORTCUTS: [&str; 5] =
-    ["Viewer on the right", "Viewer popup", "This panel", "Paste files / image", "Marketplace"];
+const SHORTCUTS: [&str; 6] =
+    ["Viewer on the right", "Viewer popup", "This panel", "Paste files / image", "Marketplace", "Repair moved folders"];
 const MARKETPLACE_ROWS: [&str; 6] =
     ["Check at startup", "Also check every", "Mark all updates", "Default sort", "Hide non-Windows", "Hide installed"];
 

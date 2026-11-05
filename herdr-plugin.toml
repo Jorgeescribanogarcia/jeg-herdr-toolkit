@@ -5,7 +5,7 @@ min_herdr_version = "0.9.5"
 description = "Built-in plugin marketplace with automatic update checks, a git-aware file viewer with Markdown and code preview, agent status icons in the sidebar, paste copied files and screenshots as paths, and a settings panel for all of it"
 platforms = ["windows"]
 
-# A Cargo workspace: builds every executable (viewer, status icons, settings, paste, marketplace) into
+# A Cargo workspace: builds every executable (viewer, status icons, settings, paste, marketplace, repair) into
 # target/release/.
 [[build]]
 command = ["cargo", "build", "--release"]
@@ -108,3 +108,23 @@ id = "updates"
 title = "Plugin updates"
 placement = "popup"
 command = ["target/release/herdr-market.exe", "updates"]
+
+# Repo folders renamed or moved: herdr keeps the old path. The check only reads and notifies (once per
+# repo); the repair is an action that asks first,
+# in a console window outside herdr (stopping the server closes every pane).
+[[startup]]
+command = ["target/release/herdr-repair.exe", "check"]
+
+[[events]]
+on = "workspace.created"
+command = ["target/release/herdr-repair.exe", "check"]
+
+[[events]]
+on = "workspace.focused"
+command = ["target/release/herdr-repair.exe", "check"]
+
+[[actions]]
+id = "repair"
+title = "Repair moved repo folders"
+contexts = ["workspace"]
+command = ["target/release/herdr-repair.exe", "open"]

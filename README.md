@@ -1,6 +1,6 @@
 # jeg-herdr-toolkit
 
-A [herdr](https://herdr.dev) plugin with five pieces that live inside herdr:
+A [herdr](https://herdr.dev) plugin with six pieces that live inside herdr:
 
 - **File viewer** in a herdr pane: a tree with Material Icon Theme icons and VS Code–style git
   status, plus a Markdown and code preview.
@@ -9,6 +9,8 @@ A [herdr](https://herdr.dev) plugin with five pieces that live inside herdr:
   pane as paths that agents such as Claude Code can read.
 - **Plugin marketplace and updates**: browse and install community plugins without leaving herdr,
   and get offered updates for the plugins you installed from GitHub.
+- **Repo folder repair**: notices when a repo folder that herdr remembers was renamed or moved, and
+  fixes herdr's saved paths.
 - **Settings panel** to change all of the above and the shortcuts, with keyboard or mouse.
 
 ## Requirements
@@ -46,6 +48,7 @@ A Cargo workspace:
 | `status/` | Agent status icons in the sidebar (`herdr-status`). |
 | `paste/` | Paste clipboard files or image as paths (`herdr-paste`). |
 | `market/` | Plugin marketplace explorer and update check (`herdr-market`). |
+| `repair/` | Stale repo folder detection and repair (`herdr-repair`). |
 | `settings/` | Settings panel (`herdr-settings`). |
 
 ## Shortcuts
@@ -57,6 +60,7 @@ A Cargo workspace:
 | `prefix+.` | Settings panel |
 | `prefix+i` | Paste clipboard files or image as paths |
 | `prefix+m` | Plugin marketplace |
+| `prefix+a` | Repair moved repo folders |
 
 All five can be changed from the panel itself.
 
@@ -168,6 +172,49 @@ finishes, `↑↓` show each result (a failure's reason in full below the list);
   the new commands.
 - No network, or another herdr window open for two minutes: nothing is shown; the reason goes to the
   plugin log.
+
+## Repo folder repair
+
+herdr remembers the folder of every repo workspace. If you rename or move that folder, creating a
+worktree fails with `fatal: cannot change to '…': No such file or directory`, and herdr has no command
+to change the folder of a workspace.
+
+- **Notice.** At startup, and when a workspace is created or focused, the plugin reads herdr's
+  `session.json` (read-only) and shows a notification, once per repo, when a repo folder is gone. If no
+  herdr window is open the notification is not shown and it is tried again at the next event.
+- **Repair** (action “Repair moved repo folders”, `prefix+a`). It opens in a console window of its own,
+  outside herdr, because stopping the server closes every herdr pane. It looks next to the old folder for the
+  new one and only proposes a folder when it is the only match:
+  - a git repo with a similar name (case, spaces and dashes ignored, a couple of typos allowed) that
+    has the same `origin` as a surviving checkout of the repo, or that lists one of them as a linked
+    worktree;
+  - without any surviving checkout there is nothing to compare, so a single similarly named git repo is
+    only offered with an extra question (“Is that the same repo?”);
+  - several matches, or none: nothing is proposed and the reason is shown.
+- **What the repair does.** It first looks at the folders with the server still running: if every
+  folder exists it says so and leaves the server alone. Otherwise, after you accept a proposal, it lists
+  the running agents, because the herdr server has to be stopped to change its file (it rewrites
+  `session.json` while it runs) and that **closes every running agent**; only after you type `yes` it
+  copies `session.json` to `session.json.pre-repair-<time>`, stops the server, edits the paths as JSON
+  (repo root, checkout, `.git` key, workspace label and the working directories under the old folder),
+  reads the file back to check it, and puts the previous content back if that fails. Then open herdr again.
+- **Limits.** The plugin cannot start herdr again. Other missing folders (panes opened elsewhere)
+  are left alone: herdr keeps those panes and shows an error. For linked worktrees git may also need
+  `git worktree repair`; the command is printed, not run.
+
+Plain folders (a workspace or pane that is not a repo with worktrees) are covered too: the one similarly
+named sibling folder is offered, always with the “same folder?” question. A missing folder with no
+similar sibling is taken as deleted and not announced.
+
+After the server is stopped, the repair prints the lines of `session.json` that change, old and new, and
+besides `yes` accepts `edit`, which opens the file so you can make those changes yourself.
+
+The repair speaks English or Spanish, following the language of Windows (`HERDR_REPAIR_LANG=en` or
+`es` forces one); in Spanish, `si` and `editar` are accepted as answers.
+
+From a terminal: `herdr-repair list` prints every remembered folder that does not exist,
+`herdr-repair show` prints the lines that would change without touching anything, and
+`herdr-repair fix` runs the repair. Set `HERDR_REPAIR_SESSION_FILE` to try it on a copy of the file.
 
 ## Settings panel
 

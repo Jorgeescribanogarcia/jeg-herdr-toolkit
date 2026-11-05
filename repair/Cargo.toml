@@ -1,0 +1,8 @@
+[package]
+name = "herdr-repair"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+common = { version = "0.1.0", path = "../common" }
+serde_json = { version = "1", features = ["preserve_order"] }
